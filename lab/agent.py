@@ -22,6 +22,20 @@ PATROL_SNAPSHOT_URL = os.environ.get(
     "PATROL_SNAPSHOT_URL", COLLECTOR_URL.rsplit("/", 1)[0] + "/patrol/snapshot"
 )
 CANARY = b"DEFNETT-LAB-MALWARE-CANARY"
+AGENT_TOKEN = (os.environ.get("AGENT_TOKEN") or "").encode("utf-8")
+
+
+def post_json(url, payload, timeout, expect_status=200):
+    headers = {"Content-Type": "application/json"}
+    if AGENT_TOKEN:
+        headers["X-Defnett-Token"] = AGENT_TOKEN.decode("utf-8")
+    request = urllib.request.Request(
+        url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        if response.status != expect_status:
+            raise RuntimeError(f"collector returned HTTP {response.status}")
+        return response.status
 
 
 def snapshot():
@@ -66,15 +80,7 @@ def send_event(event_type, path, old_hash, new_hash, event_signal):
         "indicator": "DEFNETT_LAB_CANARY" if event_signal else None,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
-    request = urllib.request.Request(
-        COLLECTOR_URL,
-        data=json.dumps(event).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=COLLECTOR_TIMEOUT) as response:
-        if response.status != 201:
-            raise RuntimeError(f"collector returned HTTP {response.status}")
+    post_json(COLLECTOR_URL, event, COLLECTOR_TIMEOUT, expect_status=201)
 
 
 def send_heartbeat():
@@ -82,15 +88,7 @@ def send_heartbeat():
         "host_id": HOST_ID,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
-    request = urllib.request.Request(
-        HEARTBEAT_URL,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=5) as response:
-        if response.status != 202:
-            raise RuntimeError(f"collector returned HTTP {response.status}")
+    post_json(HEARTBEAT_URL, payload, 5, expect_status=202)
 
 
 def send_patrol_snapshot(current):
@@ -102,15 +100,7 @@ def send_patrol_snapshot(current):
         ],
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
-    request = urllib.request.Request(
-        PATROL_SNAPSHOT_URL,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=COLLECTOR_TIMEOUT) as response:
-        if response.status != 202:
-            raise RuntimeError(f"patrol snapshot returned HTTP {response.status}")
+    post_json(PATROL_SNAPSHOT_URL, payload, COLLECTOR_TIMEOUT, expect_status=202)
 
 
 def load_state():

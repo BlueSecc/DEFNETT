@@ -1,0 +1,6 @@
+scenario,run_id,state,verdict,rejection_grade
+scenario=containment_allowed,run_id=d5e9d6ef-4d53-4573-8498-49c6eeda0106,state=COMPLETE,verdict=REJECTED_PACE_RETRY_PENDING,rejection_grade=COOLDOWN_ACTIVE
+scenario=containment_allowed,run_id=38c23b22-313c-4cdc-8e3d-b0aaaf3092aa,state=COMPLETE,verdict=PASS,
+scenario=containment_blocked_survivor_down,run_id=02b236b7-7b77-4525-8b7a-bbdab75c7a93,state=COMPLETE,verdict=PASS,SURVIVOR_NOT_HEALTHY DRAIN_LIMIT_REACHED COOLDOWN_ACTIVE
+scenario=containment_blocked_evidence_invalid,run_id=e3e7b8cc-ce4f-4c91-813c-2f1db2735b31,state=COMPLETE,verdict=PASS,EVIDENCE_INSUFFICIENT COOLDOWN_ACTIVE
+scenario=guard_duplicate_start,state=COMPLETE,verdict=PASS,http=409

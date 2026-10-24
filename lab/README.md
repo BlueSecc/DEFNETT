@@ -29,6 +29,8 @@ Perintah dasar di atas menjalankan collector dalam `DRY_RUN`. Untuk menyalakan p
 docker compose -f lab/compose.yaml -f lab/compose.canary.yaml up -d --build
 ```
 
+Overlay `compose.canary.yaml` juga menyalakan `ENABLE_LAB_AUTOREPAIR`, fixture lab (`ENABLE_LAB_FIXTURE`), dan ambang Policy Gate lab (`POLICY_RATE_MAX_ACTIONS=12`, `POLICY_COOLDOWN_SECONDS=15`) — lab demo butuh ambang longgar untuk pengulangan cepat.
+
 Dashboard menampilkan kesiapan worker dan tahapan setiap pemulihan. Overlay demo menahan tahap perbaikan Server A selama 180 detik. Hitung mundurnya tampil di dashboard saat Server A terisolasi; setelah jeda, artefak canary dikarantina, health check dijalankan, lalu Server A aktif kembali jika sehat. Durasi tiga menit hanya untuk memperlihatkan alur demo; penanganan insiden sebenarnya bergantung pada tingkat kesulitan.
 
 Dashboard memiliki tab **Patrol**. Peta Canvas 2D menyusun file dari snapshot hash agent ke ruang per server, menampilkan agent patroli, aktor berdasarkan IP, event akses, severity, dan detail hash. Snapshot hanya mengirim path relatif dan SHA-256, bukan isi file. Agent memakai `WATCH_ROOT` sebagai konfigurasi folder yang dipantau.
@@ -73,6 +75,32 @@ curl --fail --request POST http://127.0.0.1:8090/v1/lab/recover/server-a
 ```
 
 API runtime HAProxy hanya tersedia di network kontrol internal. Worker remediation hanya berbagi network kontrol internal dengan collector dan memiliki akses tulis ke volume Server A serta volume karantina. Port worker tidak dipublikasikan ke host. Overlay canary mengaktifkan playbook khusus untuk file dan marker tetap di atas.
+
+## Scenario Driver dan Policy Gate
+
+Skenario demo dikendalikan collector (in-process runner), bukan browser. Ladder langkah opsional: precheck → reconnaissance → canary event → evidence validation → policy evaluation → reaksi sesuai keputusan Gate (approved: drain → quarantine → verify → rejoin; rejected: catat alasan + probe layanan dipertahankan).
+
+- Policy Gate deterministik di `policy.py`: EVIDENCE_VALID, TARGET_ALLOWED, RISK_ABOVE_THRESHOLD, SURVIVOR_HEALTHY, SURVIVOR_CAPACITY_VERIFIED, TARGET_STATE_KNOWN, DRAIN_LIMIT, NO_RUNNING_ACTION, COOLDOWN, RATE_LIMIT, ADVISOR (HOLD-only). Satu alasan gagal = containment ditahan.
+- Keputusan direkam di tabel `policy_decisions`; langkah skenario di `scenario_steps`; metrik latensi di kolom `metrics`.
+- Endpoint skenario: `POST /api/demo/scenarios` (mulai; 409 bila masih ada run aktif), `GET /api/demo/scenarios` (daftar), `GET /api/demo/scenarios/<run_id>` (detail langkah), `POST /api/demo/scenarios/<run_id>/pause|resume|cancel`, `GET /api/demo/metrics[.csv]`.
+- Dashboard Patrol punya panel skenario dan badge asal kejadian (`SIM`, `FIM`, `VISUAL`, `LIVE`) agar event sintetis tidak tertukar dengan telemetri nyata.
+- Fixture lab env-gated: `ENABLE_LAB_FIXTURE=true` hanya pada overlay canary; app menerima tulis file canary/note via `POST /v1/lab/fixture/*` bernama tetap dengan marker tetap.
+
+Uji integrasi empat skenario (3 skenario + guard double-start, output CSV & JSON di `lab/test-results/`):
+
+```sh
+sh lab/test-scenarios.sh
+```
+
+Skenario: `containment_allowed` (izin penuh sampai rejoin), `containment_blocked_survivor_down` (ditolak karena survivor tidak sehat, backend direstore otomatis), `containment_blocked_evidence_invalid` (ditolak karena bukti tak lolos kriteria). Overlay `compose.demo-fast.yaml` mempercepat demo (`DEMO_RECOVERY_DELAY_SECONDS=12`, `SCENARIO_STEP_WAIT_SECONDS=180`). Bila Policy Gate menolak run murni karena cooldown antar-playbook, harness menunggu 20 detik dan mengulang sekali.
+
+## Naskah demo dan metrik
+
+- `lab/DEMO_SCRIPT.md` — naskah demo 4–5 menit: kondisi awal, aktor visual (VISUAL), skenario positif/negatif via panel dashboard, bukti endpoint yang tersedia, kalimat narasi, dan pemulihan demo bila gagal.
+- `python3 lab/measure_metrics.py` — eksperimen ketersediaan: sampler request HTTP nyata tiap 0,5 detik via HAProxy ketika baseline/containment/recovery; menulis `test-results/metrics-raw.csv`, `metrics-raw-run<N>.csv`, `metrics-run<N>.json` tanpa menghapus data lama.
+- `python3 lab/measure_burst.py` — burst request hanya pada jendela DRAIN yang **terverifikasi timestamp** (mulai setelah step `TARGET_DRAINED`, berhenti di `HEALTH_VERIFICATION`); koneksi baru setiap request; keluaran `test-results/burst-raw.csv`, `burst-run<N>.json`, `burst-summary.csv`.
+- `python3 lab/summarize_metrics.py` — ringkasan per fase (total/ok/fail/success%) + `test-results/metrics-summary.csv`.
+- `lab/METRICS_REPORT.md` — laporan metrik tertulis: pembagian data sebelumnya vs eksperimen baru, angka aktual, dan interpretasi jujur.
 
 ## Demo perubahan file
 

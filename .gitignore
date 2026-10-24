@@ -13,3 +13,8 @@ venv/
 
 # Docker
 *.log
+
+# Secret/berkas rahasia — selalu lewat environment variable, bukan repo
+.env
+.env.*
+!.env.example

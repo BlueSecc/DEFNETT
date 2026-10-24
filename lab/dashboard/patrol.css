@@ -100,3 +100,39 @@
   .patrol-side-heading > span { background: #2b3d40; color: #c0cec8; }
   .patrol-file-row:hover, .actor-row:hover, .patrol-event-row:hover { background: #293b3e; }
 }
+
+/* Panel skenario lab (digerakkan backend, bukan aktor kanvas) */
+.scenario-panel {
+  border: 1px solid #6a7d76; border-radius: 10px; padding: 14px 16px;
+  margin: 0 0 18px; background: #fbf8ee;
+}
+.scenario-heading { display: flex; align-items: baseline; gap: 12px; }
+.scenario-heading h3 { margin: 0; font-size: 15px; }
+.scenario-state { font: 11px ui-monospace, monospace; padding: 3px 9px; border-radius: 99px; border: 1px solid #7c8d86; }
+.scenario-state.idle { background: #efeadb; }
+.scenario-state.active { background: #d9ead7; border-color: #3a7d44; }
+.scenario-state.terminal-pass { background: #d9ead7; border-color: #3a7d44; }
+.scenario-state.terminal-fail { background: #f3d9d3; border-color: #a84238; }
+.scenario-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0 8px; }
+.scenario-controls label, .patrol-controls label { font-size: 12px; display: inline-flex; gap: 6px; align-items: center; }
+.scenario-controls select {
+  padding: 6px 9px; border-radius: 8px; border: 1px solid #6a7d76; background: #fffdf5; font: inherit;
+}
+.scenario-message { margin: 0; font-size: 12px; color: #4c5c56; font-family: ui-monospace, monospace; white-space: pre-wrap; }
+.backend-status { display: inline-flex; gap: 6px; margin-left: auto; }
+.backend-chip {
+  font: 11px ui-monospace, monospace; padding: 3px 9px; border-radius: 99px;
+  border: 1px solid #7c8d86; background: #efeadb;
+}
+.backend-chip.up { background: #d9ead7; border-color: #3a7d44; }
+.backend-chip.down { background: #f3d9d3; border-color: #a84238; }
+.event-origin-badge { font-weight: 700; letter-spacing: .04em; }
+
+@media (prefers-color-scheme: dark) {
+  .scenario-panel { border-color: #3b5054; background: #202e32; }
+  .scenario-state, .backend-chip { border-color: #3b5054; background: #293b3e; color: #dce7e1; }
+  .scenario-state.active, .scenario-state.terminal-pass, .backend-chip.up { background: #274631; border-color: #4c8a5a; }
+  .scenario-state.terminal-fail, .backend-chip.down { background: #52302b; border-color: #a84238; }
+  .scenario-controls select { background: #192326; color: #e0e8e3; border-color: #3b5054; }
+  .scenario-message { color: #aabbb5; }
+}

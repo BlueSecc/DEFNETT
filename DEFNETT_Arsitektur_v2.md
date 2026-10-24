@@ -2,7 +2,7 @@
 
 **Versi:** 2.0  
 **Status:** Rancangan untuk prototipe laboratorium  
-**Dokumen acuan:** `DEFNETT_PRD_v1.md` dan `DEFNETT_Blueprint_v2.md`
+**Dokumen acuan:** `DEFNETT_PRD_v2.md` dan `DEFNETT_Blueprint_v3.md`
 
 ## Tujuan
 
@@ -92,6 +92,8 @@ flowchart LR
 Respons diarahkan ke backend yang didukung bukti sebagai terdampak. Jangan memutus server sehat untuk mencegah penyebaran. Bila trajectory melibatkan host lain, tandai host itu **diwaspadai** dan tahan aksi otomatis sampai ada pemeriksaan operator atau bukti independen. Drain backend hanya menghentikan trafik baru melalui load balancer; itu bukan isolasi jaringan penuh dan tidak menghentikan akses langsung ke host.
 
 Penghapusan file otomatis dan isolasi jaringan otomatis berada di luar MVP. File atau host yang dicurigai ditinjau dan dipulihkan melalui prosedur operator.
+
+Di lab, kebijakan ini dijalankan Policy Gate deterministik (`lab/policy.py`) sebelum playbook canary berjalan: validitas bukti, allowlist target, ambang risiko, kesehatan survivor, kapasitas survivor, status target, batas drain, aksi berjalan, cooldown, rate limit, dan advisory LLM berstatus HOLD-only. Semua alasan dievaluasi dan direkam (`policy_decisions`); satu alasan gagal menahan aksi. Skenario demo dikendalikan Scenario Driver in-process collector (`lab/scenario.py`) dengan endpoint `/api/demo/scenarios/*`, sehingga alur izin dan penolakan bisa direkam serta diuji ulang (`sh lab/test-scenarios.sh`).
 
 ## Batas dan keputusan implementasi
 

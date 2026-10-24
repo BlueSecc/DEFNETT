@@ -145,6 +145,13 @@ function renderFiles() {
   }
 }
 
+function originBadge(event) {
+  if (event.scenario_run) return `SIM · ${cleanText(String(event.scenario_run).slice(0, 8), 8)}`;
+  if (event.source === "lab-fim-agent" || event.source === "snapshot") return "FIM";
+  if (event.source === "demo") return "VISUAL";
+  return "LIVE";
+}
+
 function renderActors() {
   const node = document.querySelector("#patrol-actors");
   node.replaceChildren();
@@ -165,7 +172,7 @@ function renderActors() {
     const description = document.createElement("span");
     description.textContent = `${safeSeverity(event.severity)} · ${cleanPath(event.path)}`;
     const action = document.createElement("small");
-    action.textContent = `${event.source === "demo" ? "DEMO · " : ""}${cleanText(event.host_id, 32)} · ${cleanText(event.action, 20)} · ${cleanText(event.status || "observed", 32)}`;
+    action.textContent = `${originBadge(event)} · ${cleanText(event.host_id, 32)} · ${cleanText(event.action, 20)} · ${cleanText(event.status || "observed", 32)}`;
     button.append(head, description, action);
     button.addEventListener("click", () => showDetail(event));
     node.append(button);
@@ -193,7 +200,7 @@ function renderEvents() {
     const path = document.createElement("span");
     path.textContent = cleanPath(event.path);
     const actor = document.createElement("small");
-    actor.textContent = `${event.source === "demo" ? "DEMO · " : ""}${cleanText(event.host_id, 32)} · ${cleanText(event.actor, 96)} · ${safeSeverity(event.severity)}`;
+    actor.textContent = `${originBadge(event)} · ${cleanText(event.host_id, 32)} · ${cleanText(event.actor, 96)} · ${safeSeverity(event.severity)}`;
     button.append(title, path, actor);
     button.addEventListener("click", () => showDetail(event));
     item.append(button);
@@ -207,9 +214,168 @@ function refreshPatrol() {
   renderActors();
   renderEvents();
   document.querySelector("#patrol-source-status").textContent = patrol.demo
-    ? `Demo aktif · ${patrol.files.length} file dari snapshot agent`
+    ? `Kanvas demo VISUAL · ${patrol.files.length} file dari snapshot agent`
     : `${patrol.files.length} file dari snapshot agent · event live`;
   layoutFiles();
+}
+
+// ---------------------------------------------------------------------------
+// Skenario lab: kontrol backend state machine (bukan dekorasi kanvas)
+// ---------------------------------------------------------------------------
+
+const scenarioUI = {
+  runId: null,
+  state: null,
+  pauseRequested: false,
+  pollTimer: null,
+  scenarios: {},
+  activeRunIds: [],
+};
+
+function terminalScenarioState(state) {
+  return state === "COMPLETE" || state === "FAILED" || state === "CANCELLED";
+}
+
+function describeRun(run) {
+  let message = `${run.scenario || "skenario"} · ${run.state}`;
+  if (Array.isArray(run.rejection_reason) && run.rejection_reason.length) {
+    message += ` · ditolak: ${run.rejection_reason.join(", ")}`;
+  }
+  return message;
+}
+
+function scenarioControlsFor(state) {
+  const activeRun = Boolean(scenarioUI.runId) && !terminalScenarioState(state || "");
+  return {
+    start: !activeRun,
+    pause: activeRun && !scenarioUI.pauseRequested,
+    resume: activeRun && scenarioUI.pauseRequested,
+    cancel: activeRun,
+  };
+}
+
+function paintScenario(run) {
+  const stateNode = document.querySelector("#scenario-state");
+  const messageNode = document.querySelector("#scenario-message");
+  const start = document.querySelector("#scenario-start");
+  const pauseButton = document.querySelector("#scenario-pause");
+  const resumeButton = document.querySelector("#scenario-resume");
+  const cancelButton = document.querySelector("#scenario-cancel");
+  if (run) {
+    scenarioUI.runId = run.run_id;
+    scenarioUI.state = run.state;
+    scenarioUI.pauseRequested = Number(run.pause_requested) > 0;
+    const stateClass = terminalScenarioState(run.state)
+      ? (run.state === "COMPLETE" ? "terminal-pass" : "terminal-fail")
+      : "active";
+    stateNode.textContent = `${run.scenario} · ${run.state}`;
+    stateNode.className = `scenario-state ${stateClass}`;
+    messageNode.textContent = describeRun(run);
+  }
+  const controls = scenarioControlsFor(scenarioUI.state || "");
+  start.hidden = !controls.start;
+  pauseButton.hidden = !controls.pause;
+  resumeButton.hidden = !controls.resume;
+  cancelButton.hidden = !controls.cancel;
+}
+
+async function adoptActiveRun() {
+  const response = await fetch("/api/demo/scenarios", { cache: "no-store" });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const data = await response.json();
+  scenarioUI.scenarios = data.scenarios || {};
+  const activeIds = Array.isArray(data.active_run_ids) ? data.active_run_ids : [];
+  const activeRuns = (data.runs || []).filter((run) => activeIds.includes(run.run_id));
+  if (activeRuns.length) {
+    paintScenario(activeRuns[0]);
+    pollScenarioRun(activeRuns[0].run_id);
+    return;
+  }
+  paintScenario({ run_id: null, scenario: "", state: "TIDAK_AKTIF", pause_requested: 0, rejection_reason: [] });
+}
+
+function pollScenarioRun(runId) {
+  window.clearInterval(scenarioUI.pollTimer);
+  scenarioUI.pollTimer = window.setInterval(async () => {
+    try {
+      const response = await fetch(`/api/demo/scenarios/${encodeURIComponent(runId)}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const run = await response.json();
+      paintScenario(run);
+      if (terminalScenarioState(run.state)) window.clearInterval(scenarioUI.pollTimer);
+    } catch (error) {
+      document.querySelector("#scenario-message").textContent = `Polling run gagal: ${error.message}`;
+    }
+  }, 800);
+}
+
+async function startScenario(event) {
+  const messageNode = document.querySelector("#scenario-message");
+  const scenarioName = document.querySelector("#scenario-select").value;
+  const target = document.querySelector("#scenario-target").value;
+  messageNode.textContent = "Memulai skenario…";
+  try {
+    const response = await fetch("/api/demo/scenarios/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scenario: scenarioName, target }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      messageNode.textContent =
+        `Start ditolak (${response.status}): ${cleanText(String(data.error || "unknown"), 96)}` +
+        (data.detail ? ` · ${cleanText(String(data.detail), 180)}` : "");
+      await adoptActiveRun();
+      return;
+    }
+    messageNode.textContent = "Skenario dibuat; mengikuti state backend…";
+    paintScenario(data.run);
+    pollScenarioRun(data.run.run_id);
+  } catch (error) {
+    messageNode.textContent = `Gagal memulai: ${error.message}`;
+  }
+}
+
+async function scenarioControl(action) {
+  const messageNode = document.querySelector("#scenario-message");
+  if (!scenarioUI.runId) return;
+  try {
+    const response = await fetch(
+      `/api/demo/scenarios/${encodeURIComponent(scenarioUI.runId)}/${action}`,
+      { method: "POST" },
+    );
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      messageNode.textContent = `${action} ditolak (${response.status}): ${cleanText(String(data.error || "unknown"), 96)}`;
+      return;
+    }
+    const data = await response.json();
+    paintScenario(data.run);
+    if (!terminalScenarioState(data.run.state)) pollScenarioRun(data.run.run_id);
+  } catch (error) {
+    messageNode.textContent = `${action} gagal: ${error.message}`;
+  }
+}
+
+async function refreshBackendChips() {
+  const mapping = { "server-a": "#backend-chip-server-a", "server-b": "#backend-chip-server-b" };
+  try {
+    const response = await fetch("/v1/dashboard", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    const backends = data.backends || data.load_balancer || {};
+    for (const [host, selector] of Object.entries(mapping)) {
+      const chip = document.querySelector(selector);
+      const state = cleanText(String((backends[host] || {}).state || backends[host] || "UNKNOWN"), 12).toUpperCase();
+      chip.textContent = `${host} · ${state}`;
+      chip.classList.toggle("up", state.startsWith("UP"));
+      chip.classList.toggle("down", /DOWN|MAINT|DRAIN/.test(state));
+    }
+  } catch (error) {
+    for (const selector of Object.values(mapping)) {
+      document.querySelector(selector).textContent = "backend terputus";
+    }
+  }
 }
 
 async function loadState() {
@@ -222,6 +388,8 @@ async function loadState() {
     refreshPatrol();
     const lastId = patrol.events.at(-1)?.id || 0;
     connectEvents(lastId);
+    await refreshBackendChips();
+    await adoptActiveRun();
   } catch (error) {
     document.querySelector("#patrol-source-status").textContent = "Collector terputus · snapshot belum tersedia";
   }
@@ -280,7 +448,7 @@ function toggleDemo() {
   patrol.demo = !patrol.demo;
   const button = document.querySelector("#patrol-demo-toggle");
   button.setAttribute("aria-pressed", String(patrol.demo));
-  button.textContent = patrol.demo ? "Hentikan demo" : "Mulai demo";
+  button.textContent = patrol.demo ? "Hentikan kanvas demo" : "Kanvas demo (VISUAL)";
   if (patrol.demo) {
     addDemoPair();
     patrol.demoTimer = window.setInterval(addDemoPair, 4200);
@@ -539,6 +707,10 @@ function selectTab(name) {
 document.querySelector("#tab-patrol").addEventListener("click", () => selectTab("patrol"));
 document.querySelector("#tab-overview").addEventListener("click", () => selectTab("overview"));
 document.querySelector("#patrol-demo-toggle").addEventListener("click", toggleDemo);
+document.querySelector("#scenario-start").addEventListener("click", startScenario);
+document.querySelector("#scenario-pause").addEventListener("click", () => scenarioControl("pause"));
+document.querySelector("#scenario-resume").addEventListener("click", () => scenarioControl("resume"));
+document.querySelector("#scenario-cancel").addEventListener("click", () => scenarioControl("cancel"));
 document.querySelector("#patrol-pause").addEventListener("click", (event) => {
   patrol.paused = !patrol.paused;
   event.currentTarget.setAttribute("aria-pressed", String(patrol.paused));
@@ -577,5 +749,6 @@ document.querySelector(".dashboard-tabs").addEventListener("keydown", (event) =>
 
 window.addEventListener("resize", layoutFiles);
 loadState();
-window.setInterval(loadState, 4000);
+// Polling state 800 ms terfokus; event live tetap lewat SSE — bukan polling per frame.
+window.setInterval(loadState, 800);
 window.requestAnimationFrame(animationFrame);

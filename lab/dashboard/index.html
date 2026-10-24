@@ -48,12 +48,12 @@
       <section id="patrol-view" class="tab-panel patrol-view" role="tabpanel" aria-labelledby="tab-patrol" hidden>
         <div class="patrol-heading">
           <div>
-            <p class="eyebrow">SIMULASI FILE INTEGRITY</p>
+            <p class="eyebrow">SIMULASI FILE INTEGRITY · VISUAL ONLY</p>
             <h2>Patrol map</h2>
-            <p class="patrol-description">Polisi mengikuti urutan snapshot hash asli di folder data kedua server. Demo memakai aktor sintetis dan tidak mengubah file.</p>
+            <p class="patrol-description">Polisi mengikuti urutan snapshot hash asli di folder data kedua server. Aktor pada kanvas adalah dekorasi (VISUAL ONLY); alur backend nyata digerakkan panel Skenario lab di bawah.</p>
           </div>
           <div class="patrol-controls" aria-label="Kontrol patroli">
-            <button id="patrol-demo-toggle" class="patrol-control primary" type="button" aria-pressed="false">Mulai demo</button>
+            <button id="patrol-demo-toggle" class="patrol-control primary" type="button" aria-pressed="false">Kanvas demo (VISUAL)</button>
             <button id="patrol-pause" class="patrol-control" type="button" aria-pressed="false">Jeda</button>
             <label>Kecepatan
               <select id="patrol-speed" aria-label="Kecepatan animasi">
@@ -73,14 +73,45 @@
           <div class="counter-suspicious"><span>Suspicious</span><strong id="patrol-suspicious-count">0</strong></div>
           <div class="counter-compromised"><span>Compromised</span><strong id="patrol-compromised-count">0</strong></div>
           <span id="patrol-source-status" role="status">Memuat snapshot agent…</span>
+          <div class="backend-status" aria-label="Status backend">
+            <span class="backend-chip" id="backend-chip-server-a">server-a</span>
+            <span class="backend-chip" id="backend-chip-server-b">server-b</span>
+          </div>
         </div>
+
+        <section class="scenario-panel" aria-labelledby="scenario-title">
+          <div class="scenario-heading">
+            <h3 id="scenario-title">Skenario lab (digerakkan backend)</h3>
+            <span id="scenario-state" class="scenario-state idle">Tidak berjalan</span>
+          </div>
+          <div class="scenario-controls">
+            <label>Skenario
+              <select id="scenario-select" aria-label="Pilih skenario">
+                <option value="containment_allowed">Containment diizinkan (positif)</option>
+                <option value="containment_blocked_survivor_down">Penolakan: survivor tidak sehat</option>
+                <option value="containment_blocked_evidence_invalid">Penolakan: bukti tidak memenuhi syarat</option>
+              </select>
+            </label>
+            <label>Target
+              <select id="scenario-target" aria-label="Pilih host target">
+                <option value="server-a">Server A</option>
+                <option value="server-b">Server B</option>
+              </select>
+            </label>
+            <button id="scenario-start" class="patrol-control primary" type="button">Mulai skenario</button>
+            <button id="scenario-pause" class="patrol-control" type="button" hidden>Jeda</button>
+            <button id="scenario-resume" class="patrol-control" type="button" hidden>Lanjutkan</button>
+            <button id="scenario-cancel" class="patrol-control danger" type="button" hidden>Batalkan</button>
+          </div>
+          <p id="scenario-message" class="scenario-message" role="status" aria-live="polite">Butuh overlay compose.canary.yaml untuk playbook; panel membaca state backend langsung.</p>
+        </section>
 
         <div class="patrol-layout">
           <div class="patrol-scene-column">
             <div class="patrol-scene-frame">
               <canvas id="patrol-canvas" role="img" aria-label="Peta top-down ruangan folder dengan polisi dan aktor akses file"></canvas>
             </div>
-            <div class="patrol-legend"><span><i class="legend-police"></i>Agent patroli</span><span><i class="legend-thief"></i>Aktor akses</span><span><i class="legend-critical"></i>File kritikal</span></div>
+            <div class="patrol-legend"><span><i class="legend-police"></i>Agent patroli</span><span><i class="legend-thief"></i>Dekorasi kanvas (VISUAL)</span><span><i class="legend-critical"></i>File kritikal</span></div>
             <div id="patrol-detail" class="patrol-detail" role="status" aria-live="polite">Pilih file atau aktor untuk melihat detail event.</div>
             <h3>File dalam snapshot</h3>
             <div id="patrol-files" class="patrol-file-list"><p class="patrol-empty">Menunggu snapshot agent.</p></div>

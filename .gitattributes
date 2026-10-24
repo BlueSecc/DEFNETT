@@ -1,0 +1,4 @@
+# Artefak pengujian (CSV/JSON hasil eksperimen) — simpan byte-for-byte:
+# tanpa normalisasi akhir-baris (-text) dan tanpa text-diff/-whitespace -check
+# karena CSV Python memakai terminal CRLF yang justru dihindari diubah (-diff).
+lab/test-results/** -text -diff

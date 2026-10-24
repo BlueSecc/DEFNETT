@@ -1,6 +1,18 @@
+# Overlay playbook canary + scenario driver:
+#   docker compose -f compose.yaml -f compose.canary.yaml up -d
+# Demo cepat tambah: -f compose.demo-fast.yaml (delay pemulihan 12 detik).
 services:
   collector:
     environment:
       ENABLE_LAB_AUTOREPAIR: "true"
       DEMO_REPAIR_HOST: server-a
-      DEMO_REPAIR_DELAY_SECONDS: "180"
+      DEMO_RECOVERY_DELAY_SECONDS: "180"
+      SCENARIO_STEP_WAIT_SECONDS: "240"
+      POLICY_RATE_MAX_ACTIONS: "12"
+      POLICY_COOLDOWN_SECONDS: "15"
+  server-a:
+    environment:
+      ENABLE_LAB_FIXTURE: "true"
+  server-b:
+    environment:
+      ENABLE_LAB_FIXTURE: "true"
