@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>DEFNETT | Patroli Lab</title>
+    <link rel="stylesheet" href="/dashboard.css">
+    <link rel="stylesheet" href="/patrol.css">
+    <script src="/dashboard.js" defer></script>
+    <script src="/patrol.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="DEFNETT, halaman patroli">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>DEFNETT<span class="brand-sub">LAB SECURITY</span></span>
+      </a>
+      <div class="top-meta">
+        <nav class="dashboard-tabs" role="tablist" aria-label="Tampilan dashboard">
+          <button id="tab-overview" type="button" role="tab" aria-selected="true" aria-controls="overview-view">Overview</button>
+          <button id="tab-patrol" type="button" role="tab" aria-selected="false" aria-controls="patrol-view">Patrol</button>
+        </nav>
+        <span class="scope">LOCAL LAB</span>
+        <span id="connection" class="connection" role="status"><span class="status-dot"></span>Menghubungkan…</span>
+        <button id="refresh" class="refresh-button" type="button">Segarkan</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="page-heading" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">OPERASI / FILE INTEGRITY</p>
+          <h1 id="page-title">Patroli sistem</h1>
+          <p class="intro">Agen memindai perubahan di <code>/data</code>, mengirim heartbeat, lalu collector mencatat hasil analisis lab.</p>
+        </div>
+        <div class="updated">
+          <span class="updated-label">PEMBARUAN TERAKHIR</span>
+          <time id="updated-at">Menunggu data</time>
+        </div>
+      </section>
+
+      <div id="load-error" class="notice error-notice" role="alert" hidden>
+        <strong>Collector tidak dapat dijangkau.</strong>
+        <span>Pastikan container lab berjalan, lalu segarkan dashboard.</span>
+      </div>
+
+      <section id="patrol-view" class="tab-panel patrol-view" role="tabpanel" aria-labelledby="tab-patrol" hidden>
+        <div class="patrol-heading">
+          <div>
+            <p class="eyebrow">SIMULASI FILE INTEGRITY</p>
+            <h2>Patrol map</h2>
+            <p class="patrol-description">Polisi mengikuti urutan snapshot hash asli di folder data kedua server. Demo memakai aktor sintetis dan tidak mengubah file.</p>
+          </div>
+          <div class="patrol-controls" aria-label="Kontrol patroli">
+            <button id="patrol-demo-toggle" class="patrol-control primary" type="button" aria-pressed="false">Mulai demo</button>
+            <button id="patrol-pause" class="patrol-control" type="button" aria-pressed="false">Jeda</button>
+            <label>Kecepatan
+              <select id="patrol-speed" aria-label="Kecepatan animasi">
+                <option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option>
+              </select>
+            </label>
+            <label>Severity
+              <select id="patrol-filter" aria-label="Filter severity">
+                <option value="all">Semua</option><option value="suspicious">Suspicious+</option><option value="compromised">Compromised</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="patrol-counters" aria-label="Ringkasan patroli">
+          <div class="counter-safe"><span>Safe</span><strong id="patrol-safe-count">0</strong></div>
+          <div class="counter-suspicious"><span>Suspicious</span><strong id="patrol-suspicious-count">0</strong></div>
+          <div class="counter-compromised"><span>Compromised</span><strong id="patrol-compromised-count">0</strong></div>
+          <span id="patrol-source-status" role="status">Memuat snapshot agent…</span>
+        </div>
+
+        <div class="patrol-layout">
+          <div class="patrol-scene-column">
+            <div class="patrol-scene-frame">
+              <canvas id="patrol-canvas" role="img" aria-label="Peta top-down ruangan folder dengan polisi dan aktor akses file"></canvas>
+            </div>
+            <div class="patrol-legend"><span><i class="legend-police"></i>Agent patroli</span><span><i class="legend-thief"></i>Aktor akses</span><span><i class="legend-critical"></i>File kritikal</span></div>
+            <div id="patrol-detail" class="patrol-detail" role="status" aria-live="polite">Pilih file atau aktor untuk melihat detail event.</div>
+            <h3>File dalam snapshot</h3>
+            <div id="patrol-files" class="patrol-file-list"><p class="patrol-empty">Menunggu snapshot agent.</p></div>
+          </div>
+
+          <aside class="patrol-sidebar" aria-label="Event dan aktor akses">
+            <section class="patrol-side-section" aria-labelledby="active-actors-title">
+              <div class="patrol-side-heading"><h3 id="active-actors-title">Aktor aktif</h3><span id="patrol-actor-count">0</span></div>
+              <div id="patrol-actors" class="patrol-actors"><p class="patrol-empty">Belum ada akses tercatat.</p></div>
+            </section>
+            <section class="patrol-side-section" aria-labelledby="live-events-title">
+              <div class="patrol-side-heading"><h3 id="live-events-title">Live event log</h3><span id="patrol-event-count">0</span></div>
+              <ol id="patrol-events" class="patrol-events"><li class="patrol-empty">Menunggu event backend.</li></ol>
+            </section>
+          </aside>
+        </div>
+      </section>
+
+      <div id="overview-view" class="tab-panel" role="tabpanel" aria-labelledby="tab-overview">
+      <section class="topology-section" aria-labelledby="topology-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">PETA ALIRAN</p>
+            <h2 id="topology-title">Agen → analisis → layanan</h2>
+          </div>
+          <span id="lab-mode" class="mode-label">MODE menunggu</span>
+        </div>
+        <div class="topology-frame">
+          <svg class="topology" viewBox="0 0 1000 360" role="img" aria-labelledby="map-title map-desc">
+            <title id="map-title">Peta patroli dan jalur layanan DEFNETT</title>
+            <desc id="map-desc">Agent pada server A dan B mengirim heartbeat dan event ke collector. Collector mengirim keputusan canary ke HAProxy, yang meneruskan request ke backend yang aktif.</desc>
+            <path class="route telemetry-route" d="M174 112 C240 112 250 173 324 173 S420 173 473 173" />
+            <path class="route telemetry-route" d="M174 272 C240 272 250 211 324 211 S420 211 473 211" />
+            <path class="route control-route" d="M564 174 C625 174 625 112 688 112" />
+            <path class="route service-route" d="M780 112 C850 112 846 176 888 176" />
+            <path class="route service-route" d="M780 112 C852 112 844 278 888 278" />
+            <circle class="route-node" cx="274" cy="143" r="4" />
+            <circle class="route-node" cx="274" cy="241" r="4" />
+            <circle class="route-node control-node" cx="627" cy="142" r="4" />
+            <g class="map-node" id="node-agent-a" transform="translate(38 79)">
+              <rect class="node-shell" width="136" height="66" rx="8" />
+              <circle class="node-status" cx="17" cy="19" r="5" />
+              <text class="node-kicker" x="31" y="22">AGENT</text>
+              <text class="node-title" x="16" y="46">Server A</text>
+              <text class="node-detail" id="agent-a-state" x="16" y="59">Menunggu</text>
+            </g>
+            <g class="map-node" id="node-agent-b" transform="translate(38 239)">
+              <rect class="node-shell" width="136" height="66" rx="8" />
+              <circle class="node-status" cx="17" cy="19" r="5" />
+              <text class="node-kicker" x="31" y="22">AGENT</text>
+              <text class="node-title" x="16" y="46">Server B</text>
+              <text class="node-detail" id="agent-b-state" x="16" y="59">Menunggu</text>
+            </g>
+            <g class="map-node collector-node" transform="translate(473 151)">
+              <rect class="node-shell" width="112" height="82" rx="10" />
+              <circle class="node-status" cx="17" cy="20" r="5" />
+              <text class="node-kicker" x="31" y="23">COLLECTOR</text>
+              <text class="node-title" x="14" y="49">FIM + rules</text>
+              <text class="node-detail" x="14" y="66">Hash · event · risk</text>
+            </g>
+            <g class="map-node proxy-node" transform="translate(688 79)">
+              <rect class="node-shell" width="132" height="66" rx="8" />
+              <circle class="node-status" cx="17" cy="19" r="5" />
+              <text class="node-kicker" x="31" y="22">LOAD BALANCER</text>
+              <text class="node-title" x="16" y="46">HAProxy</text>
+              <text class="node-detail" id="proxy-state" x="16" y="59">Status belum diketahui</text>
+            </g>
+            <g class="map-node backend-node" id="node-server-a" transform="translate(888 142)">
+              <rect class="node-shell" width="94" height="66" rx="8" />
+              <circle class="node-status" cx="15" cy="19" r="5" />
+              <text class="node-title" x="13" y="43">Server A</text>
+              <text class="node-detail" id="backend-a-state" x="13" y="58">UNKNOWN</text>
+            </g>
+            <g class="map-node backend-node" id="node-server-b" transform="translate(888 244)">
+              <rect class="node-shell" width="94" height="66" rx="8" />
+              <circle class="node-status" cx="15" cy="19" r="5" />
+              <text class="node-title" x="13" y="43">Server B</text>
+              <text class="node-detail" id="backend-b-state" x="13" y="58">UNKNOWN</text>
+            </g>
+            <text class="line-label" x="205" y="97">heartbeat + file event</text>
+            <text class="line-label" x="601" y="96">policy action</text>
+            <text class="line-label" x="825" y="161">request</text>
+          </svg>
+          <div class="map-legend" aria-label="Keterangan peta">
+            <span><i class="legend-mark telemetry-mark"></i>Telemetri agent</span>
+            <span><i class="legend-mark control-mark"></i>Kontrol lab</span>
+            <span><i class="legend-mark service-mark"></i>Jalur layanan</span>
+          </div>
+          <div class="mobile-topology" aria-label="Jalur agent, analisis, dan backend">
+            <div class="mobile-agent-pair">
+              <div class="mobile-node" id="mobile-agent-a"><span>AGENT · SERVER A</span><strong id="mobile-agent-a-state">Menunggu heartbeat</strong></div>
+              <div class="mobile-node" id="mobile-agent-b"><span>AGENT · SERVER B</span><strong id="mobile-agent-b-state">Menunggu heartbeat</strong></div>
+            </div>
+            <div class="mobile-flow-line" aria-hidden="true"></div>
+            <div class="mobile-node mobile-collector"><span>COLLECTOR · FIM + RULES</span><strong>Hash · event · risk</strong></div>
+            <div class="mobile-flow-line control-flow" aria-hidden="true"></div>
+            <div class="mobile-node"><span>LOAD BALANCER</span><strong>HAProxy</strong></div>
+            <div class="mobile-flow-line service-flow" aria-hidden="true"></div>
+            <div class="mobile-backends">
+              <div class="mobile-node" id="mobile-server-a"><span>SERVER A</span><strong id="mobile-backend-a-state">UNKNOWN</strong></div>
+              <div class="mobile-node" id="mobile-server-b"><span>SERVER B</span><strong id="mobile-backend-b-state">UNKNOWN</strong></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="analysis-band" aria-label="Status analisis">
+        <div class="analysis-copy">
+          <p class="eyebrow">MESIN ANALISIS</p>
+          <h2>FIM + aturan canary</h2>
+          <p>Perubahan hash dinilai dengan aturan deterministik. Model AI/ML belum terhubung.</p>
+        </div>
+        <div class="analysis-state">
+          <span class="state-label">AUTO-REPAIR CANARY</span>
+          <strong id="response-mode">Tidak aktif</strong>
+          <span id="response-detail">Event lain dicatat atau diberi rekomendasi operator.</span>
+        </div>
+        <div class="analysis-count">
+          <span class="state-label">EVENT TERBARU DITAMPILKAN</span>
+          <strong id="event-count">0</strong>
+          <span id="risk-summary">Memuat keputusan terbaru</span>
+        </div>
+      </section>
+
+      <section class="repair-section" aria-labelledby="repair-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">PLAYBOOK RESPONS</p>
+            <h2 id="repair-title">Isolasi dan pemulihan otomatis</h2>
+          </div>
+          <span id="repair-mode" class="mode-label">Memuat playbook</span>
+        </div>
+        <div class="repair-card">
+          <div class="repair-summary">
+            <div class="repair-status-line">
+              <span id="repair-status" class="repair-status waiting">Belum ada insiden</span>
+              <span id="remediator-health" class="worker-health">Worker: menunggu</span>
+            </div>
+            <strong id="repair-headline">Belum ada pemulihan yang dijalankan</strong>
+            <p id="repair-detail">Saat canary lab terdeteksi, sistem mengisolasi host sasaran, menjalankan tahap perbaikan demo, memeriksa health check, lalu mengaktifkan kembali backend jika sehat.</p>
+            <dl class="repair-facts">
+              <div><dt>Host yang diperbaiki</dt><dd id="repair-file">Menunggu event</dd></div>
+              <div><dt>Server lain</dt><dd id="repair-survivor">Belum ada target</dd></div>
+              <div><dt>Bukti karantina</dt><dd id="repair-quarantine">Belum ada</dd></div>
+              <div><dt>Waktu mulai</dt><dd id="repair-started">Belum ada</dd></div>
+            </dl>
+          </div>
+          <ol id="repair-steps" class="repair-steps" aria-label="Tahapan respons otomatis">
+            <li data-stage="DETECTED"><span class="step-index">1</span><span class="step-copy"><span>Canary terdeteksi</span><small></small></span></li>
+            <li data-stage="ISOLATING"><span class="step-index">2</span><span class="step-copy"><span>Isolasi host target</span><small></small></span></li>
+            <li data-stage="ISOLATED"><span class="step-index">3</span><span class="step-copy"><span>Host target keluar dari rotasi</span><small></small></span></li>
+            <li data-stage="REPAIRING"><span class="step-index">4</span><span class="step-copy"><span>Karantina artefak di host target</span><small></small></span></li>
+            <li data-stage="VERIFYING"><span class="step-index">5</span><span class="step-copy"><span>Verifikasi file dan layanan</span><small></small></span></li>
+            <li data-stage="REJOINING"><span class="step-index">6</span><span class="step-copy"><span>Health check dan rejoin target</span><small></small></span></li>
+            <li data-stage="REPAIRED"><span class="step-index">7</span><span class="step-copy"><span>Host target aktif kembali</span><small></small></span></li>
+            <li data-stage="FAILED" class="failure-step"><span class="step-index">!</span><span class="step-copy"><span>Pemulihan gagal</span><small></small></span></li>
+          </ol>
+        </div>
+        <p class="repair-note">Demo Server A menahan tahap perbaikan selama 3 menit agar proses terlihat di dashboard. Setelah itu, health check menentukan apakah server kembali aktif. Durasi penanganan di luar demo mengikuti tingkat kesulitan insiden. Playbook canary hanya memindahkan file <code>DEFNETT-LAB-CANARY.txt</code> dengan penanda lab terverifikasi.</p>
+      </section>
+
+      <section class="events-section" aria-labelledby="events-title">
+        <div class="section-heading events-heading">
+          <div>
+            <p class="eyebrow">BUKTI TERBARU</p>
+            <h2 id="events-title">Perubahan file & keputusan</h2>
+          </div>
+          <label class="filter-label" for="host-filter">Host
+            <select id="host-filter">
+              <option value="all">Semua host</option>
+              <option value="server-a">Server A</option>
+              <option value="server-b">Server B</option>
+            </select>
+          </label>
+        </div>
+        <div id="event-list" class="event-list" aria-live="polite" aria-busy="true">
+          <p class="empty-state">Mengambil event dari collector…</p>
+        </div>
+      </section>
+      <footer><span>DEFNETT lab</span><span>Polling file: tiap 3 detik · Heartbeat agent: tiap 10 detik</span></footer>
+      </div>
+    </main>
+  </body>
+</html>
