@@ -29,7 +29,9 @@ Perintah dasar di atas menjalankan collector dalam `DRY_RUN`. Untuk menyalakan p
 docker compose -f lab/compose.yaml -f lab/compose.canary.yaml up -d --build
 ```
 
-Dashboard menampilkan kesiapan worker dan tahapan setiap pemulihan. Overlay demo menahan tahap perbaikan Server A selama 75 detik (`DEMO_REPAIR_DELAY_SECONDS`). Hitung mundurnya tampil di dashboard saat Server A terisolasi; setelah jeda, artefak canary dikarantina, health check dijalankan, lalu Server A aktif kembali jika sehat. Durasi 75 detik hanya untuk memperlihatkan alur demo dan muat dalam slot containment 2:00-3:15; penanganan insiden sebenarnya bergantung pada tingkat kesulitan.
+Overlay `compose.canary.yaml` juga menyalakan `ENABLE_LAB_AUTOREPAIR`, fixture lab (`ENABLE_LAB_FIXTURE`), dan ambang Policy Gate lab (`POLICY_RATE_MAX_ACTIONS=12`, `POLICY_COOLDOWN_SECONDS=15`) — lab demo butuh ambang longgar untuk pengulangan cepat.
+
+Dashboard menampilkan kesiapan worker dan tahapan setiap pemulihan. Overlay demo menahan tahap pemulihan Server A selama 180 detik (`DEMO_RECOVERY_DELAY_SECONDS`). Hitung mundurnya tampil di dashboard saat Server A terisolasi; setelah jeda, artefak canary dikarantina, health check dijalankan, lalu Server A aktif kembali jika sehat. Overlay `compose.demo-fast.yaml` mempercepat demo jadi 12 detik (`DEMO_RECOVERY_DELAY_SECONDS=12`, `SCENARIO_STEP_WAIT_SECONDS=180`). Durasi jeda hanya untuk memperlihatkan alur demo; penanganan insiden sebenarnya bergantung pada tingkat kesulitan.
 
 Dashboard memiliki tab **Patrol**. Peta Canvas 2D menyusun file dari snapshot hash agent ke ruang per server, menampilkan agent patroli, aktor berdasarkan IP, event akses, severity, dan detail hash. Snapshot hanya mengirim path relatif dan SHA-256, bukan isi file. Agent memakai `WATCH_ROOT` sebagai konfigurasi folder yang dipantau.
 
@@ -40,11 +42,11 @@ Dashboard memiliki tab **Patrol**. Peta Canvas 2D menyusun file dari snapshot ha
 
 ### Animasi insiden (tab Patrol)
 
-Tab Patrol sekarang memainkan cerita insiden dengan karakter game:
+Tab Patrol memainkan cerita insiden dengan karakter game:
 
 1. **Maling masuk.** Event serangan (request ke app atau event FIM non-safe dari agent) memunculkan maling yang berjalan lewat jalan, masuk pintu server, lalu beraksi di file: mengintip (read), membawa kabur (download), merusak (modify), menghapus (delete), atau menanam malware (file baru). Polisi (agent AI) mengejar dan memberi peringatan.
 2. **Isolasi.** Saat playbook masuk `ISOLATING`, gerbang server turun dan kabel ke HAProxy putus (percikan + label PUTUS). Maling terjebak di dalam. Status HAProxy `MAINT` tanpa playbook juga ditampilkan sebagai server terisolasi.
-3. **Maintenance (`REPAIRING`).** Satpam menempelkan badge dan masuk, maling mencoba kabur, polisi menembak sampai maling KO. Satpam lalu memperbaiki file dengan bar progres yang mengikuti hitung mundur demo 75 detik.
+3. **Maintenance (`REPAIRING`).** Satpam menempelkan badge dan masuk, maling mencoba kabur, polisi menembak sampai maling KO. Satpam lalu memperbaiki file dengan bar progres yang mengikuti hitung mundur demo (menyesuaikan delay pemulihan: 180 detik di canary, 12 detik dengan overlay demo-fast).
 4. **Verifikasi dan rejoin.** Satpam memeriksa file satu per satu (tanda centang), kabel tersambung kembali, gerbang dibuka, server kembali ONLINE, dan maling diamankan.
 
 Urutan visual mengikuti tahap asli dari `/v1/dashboard`; tiap tahap punya durasi tayang minimum agar tahap singkat tetap terlihat. Membuka dashboard di tengah insiden langsung menampilkan keadaan terakhir. Tombol **Serang!** menjalankan simulasi lengkap di browser (tanpa menyentuh file atau database), dan kecepatan bisa diatur 0.5× sampai 4×.
@@ -63,7 +65,7 @@ Playbook memilih host dari event. Setiap server memiliki worker dan volume karan
 
 1. Memastikan backend survivor sehat.
 2. Mengeluarkan hanya host target dari rotasi HAProxy.
-3. Untuk demo Server A, dashboard menampilkan jeda 75 detik saat A tetap terisolasi. Setelah jeda, worker host target mengarantina file canary terverifikasi ke volume terpisah.
+3. Untuk demo Server A, dashboard menampilkan jeda 180 detik (12 detik dengan overlay demo-fast) saat A tetap terisolasi. Setelah jeda, worker host target mengarantina file canary terverifikasi ke volume terpisah.
 4. HAProxy menjalankan health check dan mengaktifkan kembali hanya host target jika sehat.
 
 Script default menguji Server A. Untuk menguji Server B sebagai host target:
@@ -94,6 +96,32 @@ Collector menjalankan probe kecil: satu `GET /healthz` per detik lewat HAProxy (
 - **Setelah:** mulai `REPAIRED`.
 
 Hasil ada di `/v1/dashboard` pada kunci `traffic` dan di dashboard bagian "Request lewat HAProxy". Hitungan disimpan di memori collector, jadi reset saat collector restart. Nonaktifkan dengan `TRAFFIC_PROBE_ENABLED=false`; atur `TRAFFIC_PROBE_URL` dan `TRAFFIC_PROBE_INTERVAL` bila perlu.
+
+## Scenario Driver dan Policy Gate
+
+Skenario demo dikendalikan collector (in-process runner), bukan browser. Ladder langkah opsional: precheck → reconnaissance → canary event → evidence validation → policy evaluation → reaksi sesuai keputusan Gate (approved: drain → quarantine → verify → rejoin; rejected: catat alasan + probe layanan dipertahankan).
+
+- Policy Gate deterministik di `policy.py`: EVIDENCE_VALID, TARGET_ALLOWED, RISK_ABOVE_THRESHOLD, SURVIVOR_HEALTHY, SURVIVOR_CAPACITY_VERIFIED, TARGET_STATE_KNOWN, DRAIN_LIMIT, NO_RUNNING_ACTION, COOLDOWN, RATE_LIMIT, ADVISOR (HOLD-only). Satu alasan gagal = containment ditahan.
+- Keputusan direkam di tabel `policy_decisions`; langkah skenario di `scenario_steps`; metrik latensi di kolom `metrics`.
+- Endpoint skenario: `POST /api/demo/scenarios` (mulai; 409 bila masih ada run aktif), `GET /api/demo/scenarios` (daftar), `GET /api/demo/scenarios/<run_id>` (detail langkah), `POST /api/demo/scenarios/<run_id>/pause|resume|cancel`, `GET /api/demo/metrics[.csv]`.
+- Dashboard Patrol punya panel skenario dan badge asal kejadian (`SIM`, `FIM`, `VISUAL`, `LIVE`) agar event sintetis tidak tertukar dengan telemetri nyata.
+- Fixture lab env-gated: `ENABLE_LAB_FIXTURE=true` hanya pada overlay canary; app menerima tulis file canary/note via `POST /v1/lab/fixture/*` bernama tetap dengan marker tetap.
+
+Uji integrasi empat skenario (3 skenario + guard double-start, output CSV & JSON di `lab/test-results/`):
+
+```sh
+sh lab/test-scenarios.sh
+```
+
+Skenario: `containment_allowed` (izin penuh sampai rejoin), `containment_blocked_survivor_down` (ditolak karena survivor tidak sehat, backend direstore otomatis), `containment_blocked_evidence_invalid` (ditolak karena bukti tak lolos kriteria). Overlay `compose.demo-fast.yaml` mempercepat demo (`DEMO_RECOVERY_DELAY_SECONDS=12`, `SCENARIO_STEP_WAIT_SECONDS=180`). Bila Policy Gate menolak run murni karena cooldown antar-playbook, harness menunggu 20 detik dan mengulang sekali.
+
+## Naskah demo dan metrik
+
+- `lab/DEMO_SCRIPT.md` — naskah demo 4–5 menit: kondisi awal, aktor visual (VISUAL), skenario positif/negatif via panel dashboard, bukti endpoint yang tersedia, kalimat narasi, dan pemulihan demo bila gagal.
+- `python3 lab/measure_metrics.py` — eksperimen ketersediaan: sampler request HTTP nyata tiap 0,5 detik via HAProxy ketika baseline/containment/recovery; menulis `test-results/metrics-raw.csv`, `metrics-raw-run<N>.csv`, `metrics-run<N>.json` tanpa menghapus data lama.
+- `python3 lab/measure_burst.py` — burst request hanya pada jendela DRAIN yang **terverifikasi timestamp** (mulai setelah step `TARGET_DRAINED`, berhenti di `HEALTH_VERIFICATION`); koneksi baru setiap request; keluaran `test-results/burst-raw.csv`, `burst-run<N>.json`, `burst-summary.csv`.
+- `python3 lab/summarize_metrics.py` — ringkasan per fase (total/ok/fail/success%) + `test-results/metrics-summary.csv`.
+- `lab/METRICS_REPORT.md` — laporan metrik tertulis: pembagian data sebelumnya vs eksperimen baru, angka aktual, dan interpretasi jujur.
 
 ## Demo perubahan file
 

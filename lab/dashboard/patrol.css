@@ -124,3 +124,29 @@
   .incident-steps li.done { background: #1f4a3a; color: #aee6cc; }
   .incident-steps li.current { background: #bd4c40; color: #fff; }
 }
+
+.scenario-panel {
+  border: 1px solid rgba(45, 60, 53, 0.35);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 14px 0 10px;
+  background: rgba(255, 255, 255, 0.35);
+}
+.scenario-heading { display: flex; align-items: baseline; gap: 12px; }
+.scenario-heading h3 { margin: 0; font-size: 15px; }
+.scenario-state { font: 11px ui-monospace, monospace; padding: 3px 9px; border-radius: 99px; border: 1px solid #7c8d86; }
+.scenario-state.idle { background: #efeadb; }
+.scenario-state.active { background: #d9ead7; border-color: #3a7d44; }
+.scenario-state.terminal-pass { background: #d9ead7; border-color: #3a7d44; }
+.scenario-state.terminal-fail { background: #f3d9d3; border-color: #a84238; }
+.scenario-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0 8px; }
+.scenario-controls label { font-size: 12px; display: inline-flex; gap: 6px; align-items: center; }
+.scenario-message { margin: 0; font-size: 12px; color: #4c5c56; font-family: ui-monospace, monospace; white-space: pre-wrap; }
+
+@media (prefers-color-scheme: dark) {
+  .scenario-panel { border-color: #3b5054; background: #202e32; }
+  .scenario-state { border-color: #3b5054; background: #293b3e; color: #dce7e1; }
+  .scenario-state.active, .scenario-state.terminal-pass { background: #274631; border-color: #4c8a5a; }
+  .scenario-state.terminal-fail { background: #52302b; border-color: #a84238; }
+  .scenario-message { color: #aabbb5; }
+}
