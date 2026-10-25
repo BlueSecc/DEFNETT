@@ -137,6 +137,34 @@ function renderRemediation(data) {
   }
 }
 
+function formatDelay(seconds) {
+  return seconds >= 60 && seconds % 60 === 0 ? `${seconds / 60} menit` : `${seconds} detik`;
+}
+
+function renderTraffic(data) {
+  const traffic = data.traffic || {};
+  const delay = Number(data.analysis?.demo_repair_delay_seconds || 0);
+  $("#demo-delay-label").textContent = delay > 0 ? formatDelay(delay) : "beberapa detik";
+  const phaseLabels = { before: "SEBELUM", during: "SELAMA", after: "SETELAH" };
+  const label = $("#traffic-phase");
+  label.textContent = traffic.enabled === false ? "Probe nonaktif"
+    : traffic.phase ? `Fase: ${phaseLabels[traffic.phase] || traffic.phase}` : "Menunggu probe";
+  label.classList.toggle("active", traffic.enabled !== false && traffic.phase === "during");
+  for (const card of document.querySelectorAll(".traffic-card")) {
+    const phase = card.dataset.phase;
+    const window = traffic.windows?.[phase] || { ok: 0, fail: 0, total: 0, by_host: {} };
+    card.classList.toggle("current", traffic.enabled !== false && traffic.phase === phase);
+    card.classList.toggle("has-fail", window.fail > 0);
+    card.querySelector(".traffic-ok").textContent = String(window.ok);
+    card.querySelector(".traffic-rate").textContent = window.total
+      ? `request sukses · ${Math.round((window.ok / window.total) * 100)}% dari ${window.total}`
+      : "request sukses";
+    card.querySelector(".traffic-fail").textContent = String(window.fail);
+    card.querySelector(".traffic-a").textContent = String(window.by_host?.["server-a"] || 0);
+    card.querySelector(".traffic-b").textContent = String(window.by_host?.["server-b"] || 0);
+  }
+}
+
 function renderState(data) {
   $("#updated-at").textContent = formatTime(data.generated_at);
   const mode = data.mode || "UNKNOWN";
@@ -168,6 +196,7 @@ function renderState(data) {
     ? `${highRisk} dari ${displayedEvents.length} event ini perlu ditinjau`
     : `Dari ${displayedEvents.length} event yang ditampilkan, tidak ada level tinggi`;
   renderRemediation(data);
+  renderTraffic(data);
   renderEvents();
 }
 

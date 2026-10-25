@@ -79,4 +79,24 @@ done
     exit 1
 }
 
+printf '\n%s\n' 'Memeriksa trafik sebelum, selama, dan setelah containment:'
+TARGET_HOST="$target_host" SURVIVOR_HOST="$survivor_host" python3 - <<'PY'
+import json, os, urllib.request
+
+with urllib.request.urlopen("http://127.0.0.1:8090/v1/dashboard", timeout=3) as response:
+    traffic = json.load(response).get("traffic") or {}
+if not traffic.get("enabled"):
+    raise SystemExit("Probe trafik nonaktif; set TRAFFIC_PROBE_ENABLED=true untuk pemeriksaan ini.")
+windows = traffic["windows"]
+for phase in ("before", "during", "after"):
+    w = windows[phase]
+    print(f"{phase:>6}: ok={w['ok']} fail={w['fail']} by_host={w['by_host']}")
+target, survivor = os.environ["TARGET_HOST"], os.environ["SURVIVOR_HOST"]
+if any(windows[phase]["fail"] for phase in windows):
+    raise SystemExit("Ada request gagal selama containment; layanan tidak tetap tersedia.")
+during = windows["during"]["by_host"]
+if not during.get(survivor, 0) > during.get(target, 0):
+    raise SystemExit("Selama containment, survivor harus menjawab lebih banyak daripada host target.")
+PY
+
 printf '\n%s\n' "Selesai: hanya $target_host yang dipulihkan; $survivor_host tidak diperbaiki dan kedua container tidak direstart."

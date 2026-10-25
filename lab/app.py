@@ -144,6 +144,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("X-DEFNETT-Host", HOST_ID)
         if download_name:
             safe_name = "".join(char for char in download_name if char.isalnum() or char in "._-")[:128] or "file"
             self.send_header("Content-Disposition", f'attachment; filename="{safe_name}"')

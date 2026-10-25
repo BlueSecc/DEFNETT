@@ -3,4 +3,4 @@ services:
     environment:
       ENABLE_LAB_AUTOREPAIR: "true"
       DEMO_REPAIR_HOST: server-a
-      DEMO_REPAIR_DELAY_SECONDS: "180"
+      DEMO_REPAIR_DELAY_SECONDS: "75"

@@ -50,14 +50,22 @@
           <div>
             <p class="eyebrow">SIMULASI FILE INTEGRITY</p>
             <h2>Patrol map</h2>
-            <p class="patrol-description">Polisi mengikuti urutan snapshot hash asli di folder data kedua server. Demo memakai aktor sintetis dan tidak mengubah file.</p>
+            <p class="patrol-description">Polisi (agent AI) patroli file di tiap server. Saat diserang, maling masuk, server diisolasi dari HAProxy, satpam memperbaiki file, dan polisi melumpuhkan intruder. Simulasi berjalan di browser dan tidak mengubah file.</p>
           </div>
           <div class="patrol-controls" aria-label="Kontrol patroli">
             <button id="patrol-demo-toggle" class="patrol-control primary" type="button" aria-pressed="false">Mulai demo</button>
+            <label>Simulasi insiden
+              <span class="patrol-inline">
+                <select id="patrol-incident-host" aria-label="Server target simulasi insiden">
+                  <option value="server-a" selected>Server A</option><option value="server-b">Server B</option>
+                </select>
+                <button id="patrol-incident-demo" class="patrol-control alert" type="button">Serang!</button>
+              </span>
+            </label>
             <button id="patrol-pause" class="patrol-control" type="button" aria-pressed="false">Jeda</button>
             <label>Kecepatan
               <select id="patrol-speed" aria-label="Kecepatan animasi">
-                <option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option>
+                <option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option>
               </select>
             </label>
             <label>Severity
@@ -77,10 +85,18 @@
 
         <div class="patrol-layout">
           <div class="patrol-scene-column">
+            <div id="patrol-incident" class="patrol-incident" hidden aria-live="polite">
+              <div class="incident-head"><strong id="incident-title">Insiden</strong><span id="incident-timer"></span></div>
+              <p id="incident-narration"></p>
+              <ol class="incident-steps" aria-label="Tahap insiden">
+                <li data-stage="DETECTED">Deteksi</li><li data-stage="ISOLATING">Isolasi</li><li data-stage="ISOLATED">Terkunci</li>
+                <li data-stage="REPAIRING">Maintenance</li><li data-stage="VERIFYING">Verifikasi</li><li data-stage="REJOINING">Rejoin</li><li data-stage="REPAIRED">Pulih</li>
+              </ol>
+            </div>
             <div class="patrol-scene-frame">
               <canvas id="patrol-canvas" role="img" aria-label="Peta top-down ruangan folder dengan polisi dan aktor akses file"></canvas>
             </div>
-            <div class="patrol-legend"><span><i class="legend-police"></i>Agent patroli</span><span><i class="legend-thief"></i>Aktor akses</span><span><i class="legend-critical"></i>File kritikal</span></div>
+            <div class="patrol-legend"><span><i class="legend-police"></i>Polisi (agent AI)</span><span><i class="legend-thief"></i>Maling / intruder</span><span><i class="legend-guard"></i>Satpam (perbaikan)</span><span><i class="legend-critical"></i>File kritikal</span></div>
             <div id="patrol-detail" class="patrol-detail" role="status" aria-live="polite">Pilih file atau aktor untuk melihat detail event.</div>
             <h3>File dalam snapshot</h3>
             <div id="patrol-files" class="patrol-file-list"><p class="patrol-empty">Menunggu snapshot agent.</p></div>
@@ -239,7 +255,23 @@
             <li data-stage="FAILED" class="failure-step"><span class="step-index">!</span><span class="step-copy"><span>Pemulihan gagal</span><small></small></span></li>
           </ol>
         </div>
-        <p class="repair-note">Demo Server A menahan tahap perbaikan selama 3 menit agar proses terlihat di dashboard. Setelah itu, health check menentukan apakah server kembali aktif. Durasi penanganan di luar demo mengikuti tingkat kesulitan insiden. Playbook canary hanya memindahkan file <code>DEFNETT-LAB-CANARY.txt</code> dengan penanda lab terverifikasi.</p>
+        <p class="repair-note">Demo Server A menahan tahap perbaikan selama <span id="demo-delay-label">beberapa detik</span> agar proses terlihat di dashboard. Setelah itu, health check menentukan apakah server kembali aktif. Durasi penanganan di luar demo mengikuti tingkat kesulitan insiden. Playbook canary hanya memindahkan file <code>DEFNETT-LAB-CANARY.txt</code> dengan penanda lab terverifikasi.</p>
+      </section>
+
+      <section class="traffic-section" aria-labelledby="traffic-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">KETERSEDIAAN LAYANAN</p>
+            <h2 id="traffic-title">Request lewat HAProxy: sebelum, selama, setelah containment</h2>
+          </div>
+          <span id="traffic-phase" class="mode-label">Menunggu probe</span>
+        </div>
+        <div class="traffic-grid">
+          <article class="traffic-card" data-phase="before"><h3>Sebelum</h3><strong class="traffic-ok">0</strong><span class="traffic-rate">request sukses</span><dl><div><dt>Gagal</dt><dd class="traffic-fail">0</dd></div><div><dt>Server A</dt><dd class="traffic-a">0</dd></div><div><dt>Server B</dt><dd class="traffic-b">0</dd></div></dl></article>
+          <article class="traffic-card" data-phase="during"><h3>Selama</h3><strong class="traffic-ok">0</strong><span class="traffic-rate">request sukses</span><dl><div><dt>Gagal</dt><dd class="traffic-fail">0</dd></div><div><dt>Server A</dt><dd class="traffic-a">0</dd></div><div><dt>Server B</dt><dd class="traffic-b">0</dd></div></dl></article>
+          <article class="traffic-card" data-phase="after"><h3>Setelah</h3><strong class="traffic-ok">0</strong><span class="traffic-rate">request sukses</span><dl><div><dt>Gagal</dt><dd class="traffic-fail">0</dd></div><div><dt>Server A</dt><dd class="traffic-a">0</dd></div><div><dt>Server B</dt><dd class="traffic-b">0</dd></div></dl></article>
+        </div>
+        <p id="traffic-note" class="repair-note">Collector mengirim satu request <code>/healthz</code> per detik lewat HAProxy dan mencatat backend yang menjawab. Probe ini tidak membuat event patrol.</p>
       </section>
 
       <section class="events-section" aria-labelledby="events-title">

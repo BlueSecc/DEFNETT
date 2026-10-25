@@ -28,6 +28,9 @@ ENABLE_LAB_AUTOREPAIR = os.environ.get(
 ).lower() == "true"
 DEMO_REPAIR_HOST = os.environ.get("DEMO_REPAIR_HOST", "server-a")
 DEMO_REPAIR_DELAY_SECONDS = max(0, int(os.environ.get("DEMO_REPAIR_DELAY_SECONDS", "0")))
+TRAFFIC_PROBE_ENABLED = os.environ.get("TRAFFIC_PROBE_ENABLED", "true").lower() == "true"
+TRAFFIC_PROBE_URL = os.environ.get("TRAFFIC_PROBE_URL", "http://haproxy:8080/healthz")
+TRAFFIC_PROBE_INTERVAL = max(0.2, float(os.environ.get("TRAFFIC_PROBE_INTERVAL", "1")))
 HAPROXY_HOST = os.environ.get("HAPROXY_HOST", "haproxy")
 HAPROXY_RUNTIME_PORT = int(os.environ.get("HAPROXY_RUNTIME_PORT", "9999"))
 REMEDIATOR_URLS = {
@@ -216,6 +219,89 @@ def wait_for_backend(server_name, expected_up, attempts=10):
     return False
 
 
+TRAFFIC_PHASES = ("before", "during", "after")
+TRAFFIC_STAGE_PHASE = {
+    "ISOLATED": "during", "REPAIRING": "during", "VERIFYING": "during",
+    "REJOINING": "during", "REPAIRED": "after",
+}
+TRAFFIC_LOCK = threading.Lock()
+
+
+def _traffic_bucket():
+    return {"ok": 0, "fail": 0, "by_host": {host: 0 for host in sorted(ALLOWED_HOSTS)}, "first_at": None, "last_at": None}
+
+
+TRAFFIC = {"phase": "before", "run_id": None, "buckets": {phase: _traffic_bucket() for phase in TRAFFIC_PHASES}}
+
+
+def traffic_enter_stage(event_id, stage):
+    """Pindahkan fase hitungan trafik mengikuti tahap playbook yang tercatat."""
+    with TRAFFIC_LOCK:
+        if stage == "DETECTED":
+            if TRAFFIC["run_id"] == event_id:
+                return
+            if TRAFFIC["phase"] == "after":
+                # trafik sehat sejak pemulihan sebelumnya menjadi baseline insiden baru
+                TRAFFIC["buckets"]["before"] = TRAFFIC["buckets"]["after"]
+            TRAFFIC["buckets"]["during"] = _traffic_bucket()
+            TRAFFIC["buckets"]["after"] = _traffic_bucket()
+            TRAFFIC["phase"] = "before"
+            TRAFFIC["run_id"] = event_id
+        elif TRAFFIC["run_id"] == event_id and stage in TRAFFIC_STAGE_PHASE:
+            TRAFFIC["phase"] = TRAFFIC_STAGE_PHASE[stage]
+
+
+def traffic_record(ok, host_id=None):
+    now = datetime.now(timezone.utc).isoformat()
+    with TRAFFIC_LOCK:
+        bucket = TRAFFIC["buckets"][TRAFFIC["phase"]]
+        bucket["ok" if ok else "fail"] += 1
+        if ok and host_id in bucket["by_host"]:
+            bucket["by_host"][host_id] += 1
+        bucket["first_at"] = bucket["first_at"] or now
+        bucket["last_at"] = now
+
+
+def traffic_probe_once():
+    host_id = None
+    try:
+        with urllib.request.urlopen(TRAFFIC_PROBE_URL, timeout=2) as response:
+            ok = response.status == 200
+            host_id = response.headers.get("X-DEFNETT-Host")
+    except (urllib.error.URLError, OSError, TimeoutError, ValueError):
+        ok = False
+    traffic_record(ok, host_id)
+
+
+def traffic_probe_loop():
+    while True:
+        started = time.monotonic()
+        traffic_probe_once()
+        time.sleep(max(0.05, TRAFFIC_PROBE_INTERVAL - (time.monotonic() - started)))
+
+
+def traffic_state():
+    with TRAFFIC_LOCK:
+        windows = {}
+        for phase in TRAFFIC_PHASES:
+            bucket = TRAFFIC["buckets"][phase]
+            windows[phase] = {
+                "ok": bucket["ok"], "fail": bucket["fail"], "total": bucket["ok"] + bucket["fail"],
+                "by_host": dict(bucket["by_host"]),
+                "first_at": bucket["first_at"], "last_at": bucket["last_at"],
+            }
+        return {
+            "enabled": TRAFFIC_PROBE_ENABLED,
+            "interval_seconds": TRAFFIC_PROBE_INTERVAL,
+            "phase": TRAFFIC["phase"],
+            "windows": windows,
+        }
+
+
+def format_duration(seconds):
+    return f"{seconds // 60} menit" if seconds >= 60 and seconds % 60 == 0 else f"{seconds} detik"
+
+
 def set_remediation(event_id, status, detail, quarantine_path=None, complete=False):
     now = datetime.now(timezone.utc).isoformat()
     with connect() as connection:
@@ -232,6 +318,7 @@ def set_remediation(event_id, status, detail, quarantine_path=None, complete=Fal
                WHERE event_id = ?""",
             (status, detail, quarantine_path, json.dumps(history), now, int(complete), now, event_id),
         )
+    traffic_enter_stage(event_id, status)
 
 
 def remediation_rows(limit=20):
@@ -299,6 +386,7 @@ def run_canary_response(event, event_id):
                 }]), now, now,
             ),
         )
+    traffic_enter_stage(event_id, "DETECTED")
 
     try:
         if not backend_is_up(survivor):
@@ -322,7 +410,7 @@ def run_canary_response(event, event_id):
             set_remediation(
                 event_id,
                 "REPAIRING",
-                f"Demo: perbaikan {target} berlangsung {DEMO_REPAIR_DELAY_SECONDS // 60} menit; host tetap terisolasi.",
+                f"Demo: perbaikan {target} berlangsung {format_duration(DEMO_REPAIR_DELAY_SECONDS)}; host tetap terisolasi.",
             )
             time.sleep(DEMO_REPAIR_DELAY_SECONDS)
         else:
@@ -644,6 +732,7 @@ def dashboard_state():
             "by_host": {host: {"status": remediator_health(host)} for host in sorted(ALLOWED_HOSTS)},
         },
         "backends": backend_states(),
+        "traffic": traffic_state(),
         "agents": agent_states(),
         "remediation": remediations[0] if remediations else None,
         "remediations": remediations,
@@ -831,4 +920,6 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     initialize()
+    if TRAFFIC_PROBE_ENABLED:
+        threading.Thread(target=traffic_probe_loop, name="traffic-probe", daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", 8090), Handler).serve_forever()

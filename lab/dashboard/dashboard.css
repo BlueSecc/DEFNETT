@@ -190,3 +190,16 @@ footer { display: flex; justify-content: space-between; gap: 15px; padding: 15px
   .refresh-button { transition: background-color .15s ease; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+
+.traffic-section { margin: 0 0 38px; }
+.traffic-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.traffic-card { padding: 16px 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+.traffic-card h3 { margin: 0 0 8px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.traffic-card > strong { display: block; color: var(--ink); font: 700 28px 'Avenir Next', Avenir, 'Segoe UI', sans-serif; }
+.traffic-card .traffic-rate { display: block; margin: 2px 0 12px; color: #52676e; font-size: 11px; }
+.traffic-card dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0; }
+.traffic-card dt { color: var(--muted); font-size: 10px; font-weight: 700; }
+.traffic-card dd { margin: 2px 0 0; color: #344e5b; font-size: 13px; font-weight: 700; }
+.traffic-card.current { border-color: #167d73; background: var(--teal-soft); }
+.traffic-card.has-fail { border-color: var(--red); background: var(--red-soft); }
+@media (max-width: 720px) { .traffic-grid { grid-template-columns: 1fr; } }

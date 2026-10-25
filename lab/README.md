@@ -29,7 +29,7 @@ Perintah dasar di atas menjalankan collector dalam `DRY_RUN`. Untuk menyalakan p
 docker compose -f lab/compose.yaml -f lab/compose.canary.yaml up -d --build
 ```
 
-Dashboard menampilkan kesiapan worker dan tahapan setiap pemulihan. Overlay demo menahan tahap perbaikan Server A selama 180 detik. Hitung mundurnya tampil di dashboard saat Server A terisolasi; setelah jeda, artefak canary dikarantina, health check dijalankan, lalu Server A aktif kembali jika sehat. Durasi tiga menit hanya untuk memperlihatkan alur demo; penanganan insiden sebenarnya bergantung pada tingkat kesulitan.
+Dashboard menampilkan kesiapan worker dan tahapan setiap pemulihan. Overlay demo menahan tahap perbaikan Server A selama 75 detik (`DEMO_REPAIR_DELAY_SECONDS`). Hitung mundurnya tampil di dashboard saat Server A terisolasi; setelah jeda, artefak canary dikarantina, health check dijalankan, lalu Server A aktif kembali jika sehat. Durasi 75 detik hanya untuk memperlihatkan alur demo dan muat dalam slot containment 2:00-3:15; penanganan insiden sebenarnya bergantung pada tingkat kesulitan.
 
 Dashboard memiliki tab **Patrol**. Peta Canvas 2D menyusun file dari snapshot hash agent ke ruang per server, menampilkan agent patroli, aktor berdasarkan IP, event akses, severity, dan detail hash. Snapshot hanya mengirim path relatif dan SHA-256, bukan isi file. Agent memakai `WATCH_ROOT` sebagai konfigurasi folder yang dipantau.
 
@@ -38,7 +38,18 @@ Dashboard memiliki tab **Patrol**. Peta Canvas 2D menyusun file dari snapshot ha
 - Ingest event akses: `POST /api/patrol/events`
 - Snapshot hash agent: `POST /v1/patrol/snapshot`
 
-Pilih **Patrol → Mulai demo** untuk menghasilkan dua aktor sintetis dengan aksi berbeda. Simulator hanya berjalan pada browser dan tidak menulis file atau mengirim event palsu ke database. Event live berasal dari request ke app (`/` atau `/files/<path>`) serta event integritas agent. App hanya menyajikan file relatif yang terdaftar di `PATROL_PUBLIC_FILES` (default `index.txt`); file lain, file sensitif, dan metode tulis ditolak serta dicatat sebagai event. `WATCH_ROOT` pada tiap agent menentukan folder yang dipatroli. Analisis severity tetap berbasis aturan, bukan model AI terlatih.
+### Animasi insiden (tab Patrol)
+
+Tab Patrol sekarang memainkan cerita insiden dengan karakter game:
+
+1. **Maling masuk.** Event serangan (request ke app atau event FIM non-safe dari agent) memunculkan maling yang berjalan lewat jalan, masuk pintu server, lalu beraksi di file: mengintip (read), membawa kabur (download), merusak (modify), menghapus (delete), atau menanam malware (file baru). Polisi (agent AI) mengejar dan memberi peringatan.
+2. **Isolasi.** Saat playbook masuk `ISOLATING`, gerbang server turun dan kabel ke HAProxy putus (percikan + label PUTUS). Maling terjebak di dalam. Status HAProxy `MAINT` tanpa playbook juga ditampilkan sebagai server terisolasi.
+3. **Maintenance (`REPAIRING`).** Satpam menempelkan badge dan masuk, maling mencoba kabur, polisi menembak sampai maling KO. Satpam lalu memperbaiki file dengan bar progres yang mengikuti hitung mundur demo 75 detik.
+4. **Verifikasi dan rejoin.** Satpam memeriksa file satu per satu (tanda centang), kabel tersambung kembali, gerbang dibuka, server kembali ONLINE, dan maling diamankan.
+
+Urutan visual mengikuti tahap asli dari `/v1/dashboard`; tiap tahap punya durasi tayang minimum agar tahap singkat tetap terlihat. Membuka dashboard di tengah insiden langsung menampilkan keadaan terakhir. Tombol **Serang!** menjalankan simulasi lengkap di browser (tanpa menyentuh file atau database), dan kecepatan bisa diatur 0.5× sampai 4×.
+
+Pilih **Patrol → Mulai demo** untuk menghasilkan dua aktor sintetis dengan aksi berbeda, atau **Serang!** untuk simulasi insiden lengkap. Simulator hanya berjalan pada browser dan tidak menulis file atau mengirim event palsu ke database. Event live berasal dari request ke app (`/` atau `/files/<path>`) serta event integritas agent. App hanya menyajikan file relatif yang terdaftar di `PATROL_PUBLIC_FILES` (default `index.txt`); file lain, file sensitif, dan metode tulis ditolak serta dicatat sebagai event. `WATCH_ROOT` pada tiap agent menentukan folder yang dipatroli. Analisis severity tetap berbasis aturan, bukan model AI terlatih.
 
 ## Simulasi containment yang aman
 
@@ -52,7 +63,7 @@ Playbook memilih host dari event. Setiap server memiliki worker dan volume karan
 
 1. Memastikan backend survivor sehat.
 2. Mengeluarkan hanya host target dari rotasi HAProxy.
-3. Untuk demo Server A, dashboard menampilkan jeda 3 menit saat A tetap terisolasi. Setelah jeda, worker host target mengarantina file canary terverifikasi ke volume terpisah.
+3. Untuk demo Server A, dashboard menampilkan jeda 75 detik saat A tetap terisolasi. Setelah jeda, worker host target mengarantina file canary terverifikasi ke volume terpisah.
 4. HAProxy menjalankan health check dan mengaktifkan kembali hanya host target jika sehat.
 
 Script default menguji Server A. Untuk menguji Server B sebagai host target:
@@ -73,6 +84,16 @@ curl --fail --request POST http://127.0.0.1:8090/v1/lab/recover/server-a
 ```
 
 API runtime HAProxy hanya tersedia di network kontrol internal. Worker remediation hanya berbagi network kontrol internal dengan collector dan memiliki akses tulis ke volume Server A serta volume karantina. Port worker tidak dipublikasikan ke host. Overlay canary mengaktifkan playbook khusus untuk file dan marker tetap di atas.
+
+## Trafik sebelum, selama, setelah containment
+
+Collector menjalankan probe kecil: satu `GET /healthz` per detik lewat HAProxy (`http://haproxy:8080/healthz`), lalu mencatat sukses/gagal dan backend yang menjawab (header `X-DEFNETT-Host`). Probe memakai `/healthz`, jadi tidak membuat event patrol atau aktor di peta. Hitungan dibagi tiga fase mengikuti playbook:
+
+- **Sebelum:** sejak collector hidup (atau sejak pemulihan sebelumnya) sampai `ISOLATED`.
+- **Selama:** dari `ISOLATED` sampai `REJOINING` selesai; host target sudah keluar dari rotasi.
+- **Setelah:** mulai `REPAIRED`.
+
+Hasil ada di `/v1/dashboard` pada kunci `traffic` dan di dashboard bagian "Request lewat HAProxy". Hitungan disimpan di memori collector, jadi reset saat collector restart. Nonaktifkan dengan `TRAFFIC_PROBE_ENABLED=false`; atur `TRAFFIC_PROBE_URL` dan `TRAFFIC_PROBE_INTERVAL` bila perlu.
 
 ## Demo perubahan file
 
