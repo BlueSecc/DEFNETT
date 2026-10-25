@@ -4,7 +4,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /opt/defnett
-COPY app.py agent.py collector.py remediator.py /opt/defnett/
+COPY app.py agent.py collector.py remediator.py policy.py scenario.py llm_advisor.py /opt/defnett/
 COPY dashboard/ /opt/defnett/dashboard/
 
 RUN groupadd --gid 10001 defnett \

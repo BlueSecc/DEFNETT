@@ -1,0 +1,2 @@
+phase,run_id,ts,http_code,backend_marker,target,survivor
+REJECTED_NOT_RETRIED,67e0fe69-6a3c-4db8-a666-b6532dfd3873,2026-10-24T13:25:25.630607+00:00,COMPLETE,EVIDENCE_INSUFFICIENT,server-a,server-b

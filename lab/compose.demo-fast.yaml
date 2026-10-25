@@ -1,0 +1,7 @@
+# Overlay demo cepat di atas compose.canary.yaml:
+#   docker compose -f compose.yaml -f compose.canary.yaml -f compose.demo-fast.yaml up -d
+services:
+  collector:
+    environment:
+      DEMO_RECOVERY_DELAY_SECONDS: "12"
+      SCENARIO_STEP_WAIT_SECONDS: "180"

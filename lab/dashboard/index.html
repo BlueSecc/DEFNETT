@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/patrol.css">
     <script src="/dashboard.js" defer></script>
     <script src="/patrol.js" defer></script>
+    <script src="/scenario.js" defer></script>
   </head>
   <body>
     <header class="topbar">
@@ -82,6 +83,33 @@
           <div class="counter-compromised"><span>Compromised</span><strong id="patrol-compromised-count">0</strong></div>
           <span id="patrol-source-status" role="status">Memuat snapshot agent…</span>
         </div>
+
+        <section class="scenario-panel" aria-labelledby="scenario-title">
+          <div class="scenario-heading">
+            <h3 id="scenario-title">Skenario lab (digerakkan backend)</h3>
+            <span id="scenario-state" class="scenario-state idle">Tidak berjalan</span>
+          </div>
+          <div class="scenario-controls">
+            <label>Skenario
+              <select id="scenario-select" aria-label="Pilih skenario">
+                <option value="containment_allowed">Containment diizinkan (positif)</option>
+                <option value="containment_blocked_survivor_down">Penolakan: survivor tidak sehat</option>
+                <option value="containment_blocked_evidence_invalid">Penolakan: bukti tidak memenuhi syarat</option>
+              </select>
+            </label>
+            <label>Target
+              <select id="scenario-target" aria-label="Pilih host target">
+                <option value="server-a">Server A</option>
+                <option value="server-b">Server B</option>
+              </select>
+            </label>
+            <button id="scenario-start" class="patrol-control primary" type="button">Mulai skenario</button>
+            <button id="scenario-pause" class="patrol-control" type="button" hidden>Jeda</button>
+            <button id="scenario-resume" class="patrol-control" type="button" hidden>Lanjutkan</button>
+            <button id="scenario-cancel" class="patrol-control danger" type="button" hidden>Batalkan</button>
+          </div>
+          <p id="scenario-message" class="scenario-message" role="status" aria-live="polite">Butuh overlay compose.canary.yaml untuk playbook; panel membaca state backend langsung.</p>
+        </section>
 
         <div class="patrol-layout">
           <div class="patrol-scene-column">

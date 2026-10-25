@@ -58,16 +58,20 @@ services:
       ALLOWED_HOSTS: server-a,server-b
       REMEDIATOR_URL_SERVER_A: http://remediator-a:8091/v1/repair
       REMEDIATOR_URL_SERVER_B: http://remediator-b:8091/v1/repair
+      HAPROXY_HOST: 192.168.96.2
     ports:
       - "127.0.0.1:8090:8090"
     volumes:
       - evidence_data:/evidence
     networks:
-      - telemetry
-      - host_access
-      - response_control
-      - repair_a
-      - repair_b
+      telemetry:
+      host_access:
+      repair_a:
+      repair_b:
+      response_control:
+        # IP statik agar tidak merebut alokasi dynamic di subnet /29
+        # response_control; 192.168.96.2 dikunci untuk HAProxy.
+        ipv4_address: 192.168.96.3
     depends_on:
       remediator-a:
         condition: service_healthy
@@ -203,9 +207,10 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     networks:
-      - serving
-      - host_access
-      - response_control
+      serving:
+      host_access:
+      response_control:
+        ipv4_address: 192.168.96.2
     depends_on:
       server-a:
         condition: service_healthy
@@ -228,6 +233,12 @@ networks:
     driver: bridge
   response_control:
     internal: true
+    # /30 hanya untuk collector ↔ haproxy; lock socket admin HAProxy
+    # supaya backend di network serving tidak bisa menyentuh runtime API.
+    # Range dipilih di luar /16 default Docker dan /20 lab lain.
+    ipam:
+      config:
+        - subnet: 192.168.96.0/29
   repair_a:
     internal: true
   repair_b:
