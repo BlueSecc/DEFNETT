@@ -25,7 +25,15 @@ function setNodeState(id, state, detail) {
   if (node) {
     node.setAttribute("class", `map-node ${state}`);
     const text = node.querySelector(".node-detail");
-    if (text) text.textContent = detail;
+    if (text) {
+      if (text.textContent !== detail) {
+        text.style.opacity = "0";
+        setTimeout(() => {
+          text.textContent = detail;
+          text.style.opacity = "1";
+        }, 150);
+      }
+    }
   }
   const mobileId = id.replace("node-agent-", "mobile-agent-").replace("node-server-", "mobile-server-");
   const mobileNode = document.getElementById(mobileId);

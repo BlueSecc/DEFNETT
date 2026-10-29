@@ -70,11 +70,10 @@ function renderCounters() {
   $("#patrol-event-count").textContent = String(latest.length);
 }
 function detailText(event) {
-  const time = event.ts ? new Date(event.ts).toLocaleString("id-ID") : "Waktu tidak tersedia";
-  const ip = event.actor === "police" ? "Agent polisi" : cleanText(event.actor, 96);
-  const oldHash = /^[a-f0-9]{64}$/.test(event.hash_old || "") ? event.hash_old : "belum tersedia";
-  const newHash = /^[a-f0-9]{64}$/.test(event.hash_new || "") ? event.hash_new : "belum tersedia";
-  return `${time} · ${cleanText(event.action)} · ${cleanPath(event.path)} · ${ip} · hash lama ${oldHash} · hash baru ${newHash}`;
+  const time = event.ts ? new Date(event.ts).toLocaleString("id-ID") : "—";
+  const hash = (v) => (/^[a-f0-9]{64}$/.test(v || "") ? v : "—");
+  const path = cleanPath(event.path);
+  return `${time} · ${cleanText(event.action)} · ${path}${path ? " · " : ""}${hash(event.hash_old)} → ${hash(event.hash_new)}`;
 }
 function showDetail(value) {
   patrol.selected = value;
@@ -102,7 +101,7 @@ function emptyNote(tag, text) {
 function renderFiles() {
   const node = $("#patrol-files");
   node.replaceChildren();
-  if (!patrol.files.length) { node.append(emptyNote("p", "Agent belum mengirim snapshot file.")); return; }
+  if (!patrol.files.length) { node.append(emptyNote("p", "Snapshot kosong.")); return; }
   for (const file of patrol.files.slice(0, 80)) {
     const button = document.createElement("button");
     button.type = "button";
@@ -110,7 +109,7 @@ function renderFiles() {
     const name = document.createElement("span");
     name.textContent = `${file.host_id} · ${cleanPath(file.path)}`;
     const hash = document.createElement("small");
-    hash.textContent = /^[a-f0-9]{64}$/.test(file.sha256 || "") ? file.sha256 : "Hash belum tersedia";
+    hash.textContent = /^[a-f0-9]{64}$/.test(file.sha256 || "") ? file.sha256 : "—";
     button.append(name, hash);
     button.addEventListener("click", () => showDetail({
       ts: file.checked_at, actor: "police", host_id: file.host_id, action: "read",
@@ -123,7 +122,7 @@ function renderActors() {
   const node = $("#patrol-actors");
   node.replaceChildren();
   const actors = activeActors();
-  if (!actors.length) { node.append(emptyNote("p", "Belum ada akses tercatat.")); return; }
+  if (!actors.length) { node.append(emptyNote("p", "Belum ada aktor.")); return; }
   for (const event of actors.slice(0, 8)) {
     const button = document.createElement("button");
     button.type = "button";
@@ -144,7 +143,7 @@ function renderPatrolEvents() {
   node.replaceChildren();
   const events = filteredEvents();
   if (!events.length) {
-    node.append(emptyNote("li", patrol.filter === "all" ? "Menunggu event backend." : "Tidak ada event pada severity ini."));
+    node.append(emptyNote("li", patrol.filter === "all" ? "Menunggu event…" : "Tidak ada event di filter ini."));
     return;
   }
   for (const event of events.slice(0, 24)) {
@@ -167,8 +166,8 @@ function renderPatrolEvents() {
 function refreshPatrol() {
   renderCounters(); renderFiles(); renderActors(); renderPatrolEvents();
   $("#patrol-source-status").textContent = patrol.demo
-    ? `Demo aktif · ${patrol.files.length} file dari snapshot agent`
-    : `${patrol.files.length} file dari snapshot agent · event live`;
+    ? `Demo · ${patrol.files.length} file`
+    : `${patrol.files.length} file · live`;
   layoutFiles();
 }
 
@@ -1295,7 +1294,7 @@ async function loadState() {
     refreshPatrol();
     connectEvents(events.at(-1)?.id || 0);
   } catch (error) {
-    $("#patrol-source-status").textContent = "Collector terputus · snapshot belum tersedia";
+    $("#patrol-source-status").textContent = "Collector terputus";
   }
 }
 function connectEvents(after) {
@@ -1309,10 +1308,10 @@ function connectEvents(after) {
       ingestLive(event);
       refreshPatrol();
     } catch (error) {
-      $("#patrol-source-status").textContent = "Event stream menerima payload rusak";
+      $("#patrol-source-status").textContent = "Payload rusak";
     }
   });
-  patrol.source.onerror = () => { $("#patrol-source-status").textContent = "Menyambungkan ulang event stream…"; };
+  patrol.source.onerror = () => { $("#patrol-source-status").textContent = "Menyambung ulang…"; };
 }
 async function pollDashboard() {
   if (document.hidden) return;
@@ -1332,14 +1331,14 @@ async function pollDashboard() {
 
 /* ───────────────────────── incident strip (DOM) ───────────────────────── */
 const NARRATION = {
-  DETECTED: "Intruder tertangkap basah. Alarm menyala, polisi mengarahkan senjata.",
-  ISOLATING: "Gerbang ditutup dan kabel ke HAProxy diputus. Server keluar dari rotasi.",
-  ISOLATED: "Server terisolasi. Intruder terjebak di dalam, layanan tetap jalan di server lain.",
-  REPAIRING: "Maintenance: satpam masuk, polisi menembak intruder, satpam memperbaiki file.",
-  VERIFYING: "Satpam memeriksa file satu per satu dan memastikan bersih.",
-  REJOINING: "Kabel disambung lagi, HAProxy menjalankan health check sebelum membuka gerbang.",
-  REPAIRED: "Server online kembali. Intruder diamankan.",
-  FAILED: "Pemulihan gagal. Server tetap terisolasi dan butuh pemeriksaan operator.",
+  DETECTED: "Intruder masuk · alarm aktif.",
+  ISOLATING: "Gerbang ditutup · kabel LB diputus.",
+  ISOLATED: "Intruder terjebak · layanan tetap jalan di server lain.",
+  REPAIRING: "Polisi melumpuhkan intruder · file diperbaiki.",
+  VERIFYING: "Verifikasi file satu per satu.",
+  REJOINING: "Health check dijalankan · gerbang dibuka.",
+  REPAIRED: "Server online kembali.",
+  FAILED: "Server tetap terisolasi · butuh operator.",
 };
 function updateIncidentUI() {
   const node = $("#patrol-incident");
@@ -1347,7 +1346,7 @@ function updateIncidentUI() {
   const sc = hosts.map((h) => scene[h]).filter((s) => s.vis).sort((a, b) => b.visSince - a.visSince)[0];
   if (!sc) { node.hidden = true; return; }
   node.hidden = false;
-  $("#incident-title").textContent = `${HOST_LABEL[sc.host]} · ${STAGE_TEXT[sc.vis]?.[0] || sc.vis}${sc.demoRun ? " · SIMULASI" : ""}`;
+  $("#incident-title").textContent = `${HOST_LABEL[sc.host]} · ${STAGE_TEXT[sc.vis]?.[0] || sc.vis}${sc.demoRun ? " · SIM" : ""}`;
   $("#incident-narration").textContent = NARRATION[sc.vis] || "";
   const idx = STAGES.indexOf(sc.vis), prog = repairProgress(sc);
   $("#incident-timer").textContent = prog ? prog.label : "";
@@ -1359,8 +1358,8 @@ function updateIncidentUI() {
 
 /* ───────────────────────── interaction ───────────────────────── */
 function actorDetail(a) {
-  if (a.role === "police") return `Agen AI polisi · ${HOST_LABEL[a.host]} · patroli ${filesOf(a.host).length} file dengan hash SHA-256; siaga saat ada perubahan tak terduga.`;
-  if (a.role === "guard") return `Satpam · ${HOST_LABEL[a.host]} · masuk saat maintenance untuk memperbaiki file, memverifikasi, lalu membuka gerbang kembali.`;
+  if (a.role === "police") return `Polisi AI · ${HOST_LABEL[a.host]} · patroli ${filesOf(a.host).length} file (SHA-256)`;
+  if (a.role === "guard") return `Satpam · ${HOST_LABEL[a.host]} · perbaikan + verifikasi`;
   return `${a.ko ? "Intruder dilumpuhkan" : "Intruder"} · ${a.tag || a.id} · ${HOST_LABEL[a.host]} · severity ${a.sev || "safe"}`;
 }
 canvas.addEventListener("click", (event) => {
@@ -1374,8 +1373,29 @@ canvas.addEventListener("click", (event) => {
 });
 function selectTab(name) {
   const isPatrol = name === "patrol";
-  $("#patrol-view").hidden = !isPatrol;
-  $("#overview-view").hidden = isPatrol;
+  const patrolView = $("#patrol-view");
+  const overviewView = $("#overview-view");
+
+  $("#page-title").textContent = isPatrol ? "Patroli sistem" : "Topologi lab";
+  $("#page-eyebrow").textContent = isPatrol ? "OPERASI / FILE INTEGRITY" : "OPERASI / TOPOLOGI LAB";
+  if (isPatrol) {
+    overviewView.style.opacity = "0";
+    setTimeout(() => {
+      overviewView.hidden = true;
+      patrolView.hidden = false;
+      patrolView.style.opacity = "0";
+      setTimeout(() => { patrolView.style.opacity = "1"; }, 20);
+    }, 150);
+  } else {
+    patrolView.style.opacity = "0";
+    setTimeout(() => {
+      patrolView.hidden = true;
+      overviewView.hidden = false;
+      overviewView.style.opacity = "0";
+      setTimeout(() => { overviewView.style.opacity = "1"; }, 20);
+    }, 150);
+  }
+
   $("#tab-patrol").setAttribute("aria-selected", String(isPatrol));
   $("#tab-overview").setAttribute("aria-selected", String(!isPatrol));
   if (isPatrol) layoutFiles();

@@ -30,9 +30,8 @@
     <main>
       <section class="page-heading" aria-labelledby="page-title">
         <div>
-          <p class="eyebrow">OPERASI / FILE INTEGRITY</p>
-          <h1 id="page-title">Patroli sistem</h1>
-          <p class="intro">Agen memindai perubahan di <code>/data</code>, mengirim heartbeat, lalu collector mencatat hasil analisis lab.</p>
+          <p class="eyebrow" id="page-eyebrow">OPERASI / TOPOLOGI LAB</p>
+          <h1 id="page-title">Topologi lab</h1>
         </div>
         <div class="updated">
           <span class="updated-label">PEMBARUAN TERAKHIR</span>
@@ -47,14 +46,9 @@
 
       <section id="patrol-view" class="tab-panel patrol-view" role="tabpanel" aria-labelledby="tab-patrol" hidden>
         <div class="patrol-heading">
-          <div>
-            <p class="eyebrow">SIMULASI FILE INTEGRITY</p>
-            <h2>Patrol map</h2>
-            <p class="patrol-description">Polisi (agent AI) patroli file di tiap server. Saat diserang, maling masuk, server diisolasi dari HAProxy, satpam memperbaiki file, dan polisi melumpuhkan intruder. Simulasi berjalan di browser dan tidak mengubah file.</p>
-          </div>
           <div class="patrol-controls" aria-label="Kontrol patroli">
             <button id="patrol-demo-toggle" class="patrol-control primary" type="button" aria-pressed="false">Mulai demo</button>
-            <label>Simulasi insiden
+            <label>Target
               <span class="patrol-inline">
                 <select id="patrol-incident-host" aria-label="Server target simulasi insiden">
                   <option value="server-a" selected>Server A</option><option value="server-b">Server B</option>
@@ -80,7 +74,7 @@
           <div class="counter-safe"><span>Safe</span><strong id="patrol-safe-count">0</strong></div>
           <div class="counter-suspicious"><span>Suspicious</span><strong id="patrol-suspicious-count">0</strong></div>
           <div class="counter-compromised"><span>Compromised</span><strong id="patrol-compromised-count">0</strong></div>
-          <span id="patrol-source-status" role="status">Memuat snapshot agent…</span>
+          <span id="patrol-source-status" role="status">Memuat…</span>
         </div>
 
         <div class="patrol-layout">
@@ -96,20 +90,20 @@
             <div class="patrol-scene-frame">
               <canvas id="patrol-canvas" role="img" aria-label="Peta top-down ruangan folder dengan polisi dan aktor akses file"></canvas>
             </div>
-            <div class="patrol-legend"><span><i class="legend-police"></i>Polisi (agent AI)</span><span><i class="legend-thief"></i>Maling / intruder</span><span><i class="legend-guard"></i>Satpam (perbaikan)</span><span><i class="legend-critical"></i>File kritikal</span></div>
-            <div id="patrol-detail" class="patrol-detail" role="status" aria-live="polite">Pilih file atau aktor untuk melihat detail event.</div>
-            <h3>File dalam snapshot</h3>
-            <div id="patrol-files" class="patrol-file-list"><p class="patrol-empty">Menunggu snapshot agent.</p></div>
+            <div class="patrol-legend"><span><i class="legend-police"></i>Polisi AI</span><span><i class="legend-thief"></i>Intruder</span><span><i class="legend-guard"></i>Satpam</span><span><i class="legend-critical"></i>Kritikal</span></div>
+            <div id="patrol-detail" class="patrol-detail" role="status" aria-live="polite">Klik file atau aktor untuk detail.</div>
+            <h3>Snapshot file</h3>
+            <div id="patrol-files" class="patrol-file-list"><p class="patrol-empty">Memuat snapshot…</p></div>
           </div>
 
           <aside class="patrol-sidebar" aria-label="Event dan aktor akses">
             <section class="patrol-side-section" aria-labelledby="active-actors-title">
-              <div class="patrol-side-heading"><h3 id="active-actors-title">Aktor aktif</h3><span id="patrol-actor-count">0</span></div>
-              <div id="patrol-actors" class="patrol-actors"><p class="patrol-empty">Belum ada akses tercatat.</p></div>
+              <div class="patrol-side-heading"><h3 id="active-actors-title">Aktor</h3><span id="patrol-actor-count">0</span></div>
+              <div id="patrol-actors" class="patrol-actors"><p class="patrol-empty">Belum ada aktor.</p></div>
             </section>
             <section class="patrol-side-section" aria-labelledby="live-events-title">
-              <div class="patrol-side-heading"><h3 id="live-events-title">Live event log</h3><span id="patrol-event-count">0</span></div>
-              <ol id="patrol-events" class="patrol-events"><li class="patrol-empty">Menunggu event backend.</li></ol>
+              <div class="patrol-side-heading"><h3 id="live-events-title">Event log</h3><span id="patrol-event-count">0</span></div>
+              <ol id="patrol-events" class="patrol-events"><li class="patrol-empty">Menunggu event…</li></ol>
             </section>
           </aside>
         </div>
