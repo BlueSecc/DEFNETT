@@ -1,12 +1,14 @@
 [Unit]
-Description=DEFNETT collector + dashboard :8090
-After=network-online.target
+Description=DEFNETT collector + dashboard HTTPS :8443
+After=network-online.target defnett-approval-authority.service defnett-executor.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=defnett
-Group=defnett
+User=defnett-collector
+Group=defnett-collector
+SupplementaryGroups=defnett-evidence
+UMask=0007
 EnvironmentFile=/etc/defnett/collector.env
 ExecStart=/usr/bin/python3 /opt/defnett/collector.py
 Restart=always
@@ -19,6 +21,12 @@ PrivateTmp=yes
 CapabilityBoundingSet=
 AmbientCapabilities=
 ReadWritePaths=/evidence
+# Root-owned idempotent host guard permits control-port egress only for executor UID.
+ExecStartPre=+/usr/local/libexec/defnett-collector-network-guard
+# Inbound browser and agent traffic plus the local executor are needed. The
+# systemd cgroup BPF filter is mandatory for the VM isolation claim.
+IPAddressDeny=any
+IPAddressAllow=127.0.0.0/8 ::1/128 192.168.56.1/32 192.168.56.11/32 192.168.56.12/32
 
 [Install]
 WantedBy=multi-user.target

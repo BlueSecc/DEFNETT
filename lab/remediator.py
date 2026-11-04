@@ -1,3 +1,10 @@
+"""Worker remediation host lab: karantina dan pemulihan kunci dari master.
+
+Tahap 1 (security boundary): /master tidak lagi diisi otomatis dari /target.
+Sumber kebenaran pemulihan adalah manifes sha256 ("trust anchor") yang ditulis
+CLI provisioning oleh operator. Bila master hilang, atau isinya tidak cocok
+manifes, fungsi pemulihan menolak dengan pesan master_untrusted:<nama>.
+"""
 import hashlib
 import hmac
 import json
@@ -6,6 +13,7 @@ import stat
 import uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import tls_support
 from pathlib import Path
 
 
@@ -13,6 +21,7 @@ TARGET = Path(os.environ.get("TARGET_ROOT", "/target"))
 TARGET_HOST_ID = os.environ.get("TARGET_HOST_ID", "server-a")
 QUARANTINE = Path(os.environ.get("QUARANTINE_ROOT", f"/quarantine/{TARGET_HOST_ID}"))
 MASTER = Path(os.environ.get("MASTER_ROOT", "/master"))
+MANIFEST_PATH = Path(os.environ.get("MANIFEST_PATH", "/manifest/keys.json"))
 CANARY_NAME = "DEFNETT-LAB-CANARY.txt"
 CANARY = b"DEFNETT-LAB-MALWARE-CANARY"
 KEY_NAMES = ("etc/kunci1.dat", "etc/kunci2.dat")
@@ -50,28 +59,42 @@ def atomic_write(path, content, mode):
     os.replace(temporary, path)
 
 
-def ensure_masters():
-    """Simpan salinan bersih kunci di /master sekali saat worker hidup; dipakai untuk pemulihan."""
+def load_manifest():
+    """Baca manifes kepercayaan; ValueError master_untrusted bila tidak layak."""
+    try:
+        raw = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise ValueError(f"master_untrusted:manifest_missing:{MANIFEST_PATH}") from None
+    except (OSError, ValueError):
+        raise ValueError(f"master_untrusted:manifest_invalid:{MANIFEST_PATH}") from None
+    if not isinstance(raw, dict) or raw.get("version") != 1 or not isinstance(raw.get("files"), dict):
+        raise ValueError(f"master_untrusted:manifest_invalid:{MANIFEST_PATH}")
+    return raw["files"]
+
+
+def verify_masters():
+    """Kembalikan {nama master: isi} bila SEMUA kunci cocok manifes; lainnya tolak."""
+    entries = load_manifest()
+    verified = {}
     for name in KEY_NAMES:
         master = MASTER / Path(name).name
-        if master.exists():
-            continue
-        source = TARGET / name
         try:
-            metadata = source.lstat()
+            content = master.read_bytes()
         except FileNotFoundError:
-            print(f"remediator-{TARGET_HOST_ID} master skip {name}: source_missing", flush=True)
-            continue
-        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_FILE_SIZE:
-            print(f"remediator-{TARGET_HOST_ID} master skip {name}: source_type_or_size_rejected", flush=True)
-            continue
-        content = source.read_bytes()
-        if KEY_MARKER not in content:
-            print(f"remediator-{TARGET_HOST_ID} master skip {name}: key_marker_missing", flush=True)
-            continue
-        MASTER.mkdir(parents=True, exist_ok=True)
-        atomic_write(master, content, 0o600)
-        print(f"remediator-{TARGET_HOST_ID} master seeded {name} sha256={hashlib.sha256(content).hexdigest()}", flush=True)
+            raise ValueError(f"master_untrusted:{name}") from None
+        entry = entries.get(Path(name).name)
+        expected = entry.get("sha256") if isinstance(entry, dict) else None
+        expected_bytes = entry.get("bytes") if isinstance(entry, dict) else None
+        if (not isinstance(expected, str) or len(expected) != 64
+                or any(character not in "0123456789abcdef" for character in expected)
+                or not isinstance(expected_bytes, int) or isinstance(expected_bytes, bool)
+                or expected_bytes != len(content) or len(content) > MAX_FILE_SIZE
+                or KEY_MARKER not in content):
+            raise ValueError(f"master_untrusted:{name}")
+        if hashlib.sha256(content).hexdigest() != expected:
+            raise ValueError(f"master_untrusted:{name}")
+        verified[name] = content
+    return verified
 
 
 def quarantine_canary():
@@ -104,20 +127,18 @@ def quarantine_canary():
 def quarantine_keys():
     """Kunci tampered dikarantina sebagai bukti, lalu kedua kunci dipulihkan dari master.
 
-    Kunci yang masih identik dengan master tidak disentuh; jika file hilang,
-    langsung dipulihkan dari master. Verifikasi akhir: sha256 di /target
-    harus sama dengan sha256 master untuk kedua kunci.
+    Master wajib cocok manifes kepercayaan; bila tidak, tolak dengan
+    master_untrusted:<nama> dan JANGAN menulis /target. Kunci yang masih
+    identik master tidak disentuh. Verifikasi akhir: sha256 di /target harus
+    sama dengan sha256 master untuk kedua kunci.
     """
+    masters = verify_masters()
     quarantined = []
     restored = []
     untouched = []
     digests = {}
     for name in KEY_NAMES:
-        master = MASTER / Path(name).name
-        try:
-            master_content = master.read_bytes()
-        except FileNotFoundError as error:
-            raise ValueError(f"master_missing:{name}") from None
+        master_content = masters[name]
         if KEY_MARKER not in master_content:
             raise ValueError(f"master_not_verified:{name}")
         master_digest = hashlib.sha256(master_content).hexdigest()
@@ -181,10 +202,11 @@ def quarantine_keys():
 def simulate_key_tamper():
     """Simulasi pencurian untuk demo lab: menambah satu baris penanda ke kunci demo.
 
-    Hanya menyentuh etc/kunci1.dat milik host ini, dan menolak bila file itu sudah
-    berbeda dari salinan master, agar serangan tidak menumpuk. Perubahan ini yang
-    nanti dideteksi agent dan memicu playbook isolasi sungguhan.
+    Hanya menyentuh etc/kunci1.dat milik host ini, dan menolak bila file itu
+    sudah berbeda dari salinan master, atau master tidak dipercaya (bila master
+    tidak kenal, pemulihan berikutnya tidak akan mampu, jadi serangan ditolak).
     """
+    masters = verify_masters()
     name = KEY_NAMES[0]
     source = TARGET / name
     try:
@@ -196,9 +218,8 @@ def simulate_key_tamper():
     content = read_regular_file(source)
     if KEY_MARKER not in content:
         raise ValueError("key_marker_not_verified")
-    master = MASTER / Path(name).name
-    if not master.exists() or master.read_bytes() != content:
-        raise ValueError("key_not_pristine")
+    if content != masters[name]:
+        raise ValueError(f"key_not_pristine:{name}")
     stamp = datetime.now(timezone.utc).isoformat()
     atomic_write(source, content + f"DEFNETT-LAB-ATTACK-SIM {stamp}\n".encode("utf-8"), 0o644)
     return {
@@ -222,6 +243,12 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/healthz":
             return self.respond(200, {"status": "ok"})
+        if self.path == "/v1/trust":
+            try:
+                verify_masters()
+                return self.respond(200, {"trusted": True})
+            except ValueError as error:
+                return self.respond(409, {"trusted": False, "error": str(error)[:192]})
         return self.respond(404, {"error": "not_found"})
 
     def do_POST(self):
@@ -262,5 +289,14 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    ensure_masters()
-    ThreadingHTTPServer(("0.0.0.0", 8091), Handler).serve_forever()
+    try:
+        verify_masters()
+        print(f"remediator-{TARGET_HOST_ID} master verified from {MANIFEST_PATH}", flush=True)
+    except ValueError as error:
+        print(f"remediator-{TARGET_HOST_ID} master UNTRUSTED: {error}; pemulihan akan ditolak", flush=True)
+    server = ThreadingHTTPServer(("0.0.0.0", 8091), Handler)
+    context = tls_support.server_context(
+        os.environ.get("TLS_CERT_FILE", ""), os.environ.get("TLS_KEY_FILE", ""),
+    )
+    server.socket = context.wrap_socket(server.socket, server_side=True)
+    server.serve_forever()

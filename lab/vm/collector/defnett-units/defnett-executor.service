@@ -1,0 +1,31 @@
+[Unit]
+Description=DEFNETT executor :8092 (pintu eksekusi satu-satunya)
+Documentation=file:///opt/defnett/executor.py
+After=network-online.target defnett-approval-authority.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=defnett-executor
+Group=defnett-executor
+SupplementaryGroups=defnett-evidence
+UMask=0007
+EnvironmentFile=/etc/defnett/executor.env
+ExecStart=/usr/bin/python3 /opt/defnett/executor.py
+Restart=always
+RestartSec=2
+# hardening: executor butuh /evidence rw saja; tanpa kapsibilitas
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/evidence
+# Egress is restricted to the HAProxy gateway, the two remediators, and
+# loopback. Deployment must fail closed if systemd cannot install this filter.
+IPAddressDeny=any
+IPAddressAllow=127.0.0.0/8 ::1/128 192.168.56.10/32 192.168.56.11/32 192.168.56.12/32
+
+[Install]
+WantedBy=multi-user.target

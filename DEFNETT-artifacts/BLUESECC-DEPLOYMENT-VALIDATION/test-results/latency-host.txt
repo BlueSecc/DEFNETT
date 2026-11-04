@@ -1,0 +1,3 @@
+Dashboard HTTPS GET / (koneksi TLS baru tiap request): n=50 gagal=0 median=4.1 ms p95=4.7 ms maks=13.7 ms
+API dashboard tanpa sesi (401, lewat cek sesi Authority): n=50 gagal=0 median=6.1 ms p95=6.9 ms maks=8.4 ms
+Blog lewat HAProxy :8080 (WordPress): n=50 gagal=0 median=9.5 ms p95=22.7 ms maks=1080.3 ms

@@ -84,10 +84,15 @@ class Evidence(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         collector.initialize()
+        collector.APPROVAL_TEST_ADAPTER = collector.approvals
 
     def corrupt(self, statement, *values):
-        with sqlite3.connect(os.environ["DB_PATH"]) as connection:
-            connection.execute(statement, values)
+        connection = sqlite3.connect(os.environ["DB_PATH"])
+        try:
+            with connection:
+                connection.execute(statement, values)
+        finally:
+            connection.close()
 
     def test_chain_detects_tampering(self):
         collector.store_event(key_event("c" * 64))
@@ -125,12 +130,15 @@ class ApiAuthentication(unittest.TestCase):
     def setUpClass(cls):
         collector.initialize()
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), collector.Handler)
-        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.thread.start()
         cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
 
     @classmethod
     def tearDownClass(cls):
         cls.server.shutdown()
+        cls.server.server_close()
+        cls.thread.join(timeout=2)
 
     def post(self, path, headers):
         request = urllib.request.Request(self.base + path, data=json.dumps({"host_id": "server-a"}).encode(),
@@ -139,7 +147,10 @@ class ApiAuthentication(unittest.TestCase):
             with urllib.request.urlopen(request, timeout=5) as response:
                 return response.status
         except urllib.error.HTTPError as error:
-            return error.code
+            try:
+                return error.code
+            finally:
+                error.close()
 
     def test_agent_endpoints_require_token(self):
         self.assertEqual(self.post("/v1/agent/heartbeat", {}), 401)

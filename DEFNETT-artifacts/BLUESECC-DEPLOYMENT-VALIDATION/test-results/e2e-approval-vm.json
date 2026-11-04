@@ -1,0 +1,171 @@
+{
+  "tested_at": "2026-11-03T18:41:44.441710+00:00",
+  "checks": {
+    "cookie_secure_httponly_samesite": true,
+    "dashboard_tanpa_login": 401,
+    "serang_tanpa_csrf": 403,
+    "https_tanpa_ca": "DITOLAK"
+  },
+  "incidents": [
+    {
+      "host": "server-a",
+      "vector": "ssh",
+      "result": "PASS",
+      "attack_http": 202,
+      "pending_after_attack_s": 6.07,
+      "backend_before_approval": "UP",
+      "approve_http": 200,
+      "isolated_after_approve_s": 0.29,
+      "up_after_approve_s": 17.47,
+      "metrics": {
+        "detect": 0.95,
+        "isolate": null,
+        "recover": 17.04,
+        "demo_hold": 15,
+        "recover_without_hold": 2.04
+      },
+      "entry": {
+        "ts": "2026-11-03T18:38:51.700159+00:00",
+        "actor": "police",
+        "port": 22,
+        "path": "simulasi-ssh"
+      }
+    },
+    {
+      "host": "server-b",
+      "vector": "web",
+      "result": "PASS",
+      "attack_http": 202,
+      "pending_after_attack_s": 6.01,
+      "backend_before_approval": "UP",
+      "approve_http": 200,
+      "isolated_after_approve_s": 0.29,
+      "up_after_approve_s": 16.72,
+      "metrics": {
+        "detect": 0.39,
+        "isolate": null,
+        "recover": 16.55,
+        "demo_hold": 15,
+        "recover_without_hold": 1.55
+      },
+      "entry": {
+        "ts": "2026-11-03T18:39:20.332906+00:00",
+        "actor": "police",
+        "port": 80,
+        "path": "simulasi-web"
+      }
+    },
+    {
+      "host": "server-a",
+      "vector": "web",
+      "result": "PASS",
+      "attack_http": 202,
+      "pending_after_attack_s": 7.22,
+      "backend_before_approval": "UP",
+      "approve_http": 200,
+      "isolated_after_approve_s": 0.34,
+      "up_after_approve_s": 16.14,
+      "metrics": {
+        "detect": 1.5,
+        "isolate": 0.01,
+        "recover": 15.53,
+        "demo_hold": 15,
+        "recover_without_hold": 0.53
+      },
+      "entry": {
+        "ts": "2026-11-03T18:39:48.350877+00:00",
+        "actor": "police",
+        "port": 80,
+        "path": "simulasi-web"
+      }
+    },
+    {
+      "host": "server-b",
+      "vector": "ssh",
+      "result": "PASS",
+      "attack_http": 202,
+      "pending_after_attack_s": 6.76,
+      "backend_before_approval": "UP",
+      "approve_http": 200,
+      "isolated_after_approve_s": 0.05,
+      "up_after_approve_s": 15.74,
+      "metrics": {
+        "detect": 1.16,
+        "isolate": 0.01,
+        "recover": 15.54,
+        "demo_hold": 15,
+        "recover_without_hold": 0.54
+      },
+      "entry": {
+        "ts": "2026-11-03T18:40:16.758695+00:00",
+        "actor": "police",
+        "port": 22,
+        "path": "simulasi-ssh"
+      }
+    },
+    {
+      "host": "server-a",
+      "vector": "ssh",
+      "result": "PASS",
+      "attack_http": 202,
+      "pending_after_attack_s": 8.27,
+      "backend_before_approval": "UP",
+      "approve_http": 200,
+      "isolated_after_approve_s": 0.05,
+      "up_after_approve_s": 16.92,
+      "metrics": {
+        "detect": 2.76,
+        "isolate": 0.01,
+        "recover": 16.53,
+        "demo_hold": 15,
+        "recover_without_hold": 1.53
+      },
+      "entry": {
+        "ts": "2026-11-03T18:40:44.338331+00:00",
+        "actor": "police",
+        "port": 22,
+        "path": "simulasi-ssh"
+      }
+    },
+    {
+      "host": "server-b",
+      "vector": "web",
+      "result": "PASS",
+      "attack_http": 202,
+      "pending_after_attack_s": 6.09,
+      "backend_before_approval": "UP",
+      "approve_http": 200,
+      "isolated_after_approve_s": 0.29,
+      "up_after_approve_s": 16.48,
+      "metrics": {
+        "detect": 0.46,
+        "isolate": 0.01,
+        "recover": 16.04,
+        "demo_hold": 15,
+        "recover_without_hold": 1.04
+      },
+      "entry": {
+        "ts": "2026-11-03T18:41:14.613192+00:00",
+        "actor": "police",
+        "port": 80,
+        "path": "simulasi-web"
+      }
+    }
+  ],
+  "passed": 6,
+  "blog": {
+    "total": 506,
+    "http_200": 506,
+    "by_server": {
+      "SERVER A": 255,
+      "SERVER B": 251
+    },
+    "failures": []
+  },
+  "evidence": {
+    "status": "ok",
+    "events": 3132,
+    "fully_verified": 52,
+    "link_only": 3080
+  }
+}

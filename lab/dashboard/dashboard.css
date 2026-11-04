@@ -138,7 +138,7 @@ button:hover, .btn:hover {
 /* KPI Bar (Atas) */
 .kpi-bar {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 16px;
 }
@@ -303,6 +303,12 @@ button:hover, .btn:hover {
 }
 .s-panel { display: none; flex-direction: column; gap: 12px; }
 .s-panel.active { display: flex; }
+.trajectory-list { display: flex; flex-direction: column; gap: 10px; }
+.trajectory-card { display: flex; flex-direction: column; gap: 7px; padding: 10px; border: 1px solid var(--border-color); border-radius: 7px; background: var(--bg-card); font-size: 11px; }
+.trajectory-card > strong { color: var(--accent-teal); font-family: var(--font-mono); overflow-wrap: anywhere; }
+.trajectory-timeline { display: flex; flex-direction: column; gap: 6px; margin: 0; padding-left: 20px; color: var(--text-main); }
+.trajectory-timeline li { padding-left: 2px; overflow-wrap: anywhere; }
+.trajectory-relation { margin: 0; padding: 6px 8px; border-left: 2px solid var(--accent-amber); color: var(--text-muted); overflow-wrap: anywhere; }
 
 .sidebar-footer:has(.detail-inspector:empty) { display: none; }
 .sidebar-footer {
@@ -488,3 +494,67 @@ button:hover, .btn:hover {
   .details-sidebar.drawer-open { transform: translateX(0); }
   .main-content { height: calc(100vh - 54px); }
 }
+
+/* ── Operator login + approval panel (Tahap 1) ── */
+.refresh-button.active { border-color: var(--accent-teal); color: var(--accent-teal); }
+.approvals-block {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .03);
+}
+.approvals-block .approval-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+.approvals-block .approval-head strong { font-size: 13px; }
+.approval-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.approval-row { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid rgba(255,255,255,.06); border-radius: 8px; }
+.approval-row.empty { color: var(--text-dim); border-style: dashed; }
+.approval-head-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.approval-head-row strong { font-size: 12px; font-weight: 600; color: var(--text-dim); }
+.approval-status { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(255,255,255,.14); }
+.approval-status.st-pending { color: var(--accent-amber); border-color: rgba(240, 178, 58, .4); }
+.approval-status.st-approved { color: var(--accent-teal); border-color: rgba(63, 191, 134, .4); }
+.approval-status.st-rejected, .approval-status.st-expired { color: var(--accent-red); border-color: rgba(224, 88, 74, .35); }
+.approval-status.st-claimed, .approval-status.st-running { color: var(--text-dim); animation: pulse 1.6s ease-in-out infinite; }
+.approval-status.st-done { color: #6ee3b0; }
+.approval-status.st-failed { color: var(--accent-red); }
+.approval-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.approval-btn {
+  border: 1px solid rgba(63, 191, 134, .5);
+  background: rgba(63, 191, 134, .12);
+  color: #6ee3b0;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.approval-btn.danger { border-color: rgba(224, 88, 74, .5); background: rgba(224, 88, 74, .1); color: #ff8d80; }
+.approval-btn:hover { filter: brightness(1.15); }
+.op-modal {
+  position: fixed; inset: 0; z-index: 300;
+  display: grid; place-items: center;
+  background: rgba(6, 10, 14, .72);
+}
+.op-modal[hidden] { display: none; }
+.op-box {
+  display: flex; flex-direction: column; gap: 10px;
+  width: min(320px, 92vw);
+  padding: 20px;
+  border-radius: 14px;
+  background: var(--panel, #10181f);
+  border: 1px solid rgba(255, 255, 255, .1);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .5);
+}
+.op-box strong { font-size: 15px; }
+.op-box input {
+  font: inherit;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(255, 255, 255, .04);
+  color: inherit;
+}
+.op-actions { display: flex; gap: 8px; }
+.op-actions .btn-primary { border-color: rgba(63,191,134,.55); color: #6ee3b0; }
+.op-error { color: var(--accent-red); font-size: 12px; min-height: 16px; }

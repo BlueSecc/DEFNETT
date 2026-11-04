@@ -1,0 +1,26 @@
+#!/bin/sh
+# Host OUTPUT allowlist for the executor UID on the control ports.
+# Installed root-owned and invoked as a privileged systemd ExecStartPre.
+set -eu
+
+IPTABLES=/usr/sbin/iptables
+[ -x "$IPTABLES" ] || { echo "iptables unavailable; refusing collector start" >&2; exit 1; }
+id defnett-collector >/dev/null 2>&1 || {
+  echo "defnett-collector account missing; refusing collector start" >&2
+  exit 1
+}
+
+EXECUTOR_UID="$(id -u defnett-executor)"
+allow_only_executor() {
+  destination="$1"
+  port="$2"
+  if ! "$IPTABLES" -C OUTPUT -m owner ! --uid-owner "$EXECUTOR_UID" -p tcp \
+       -d "$destination" --dport "$port" -j REJECT >/dev/null 2>&1; then
+    "$IPTABLES" -I OUTPUT 1 -m owner ! --uid-owner "$EXECUTOR_UID" -p tcp \
+      -d "$destination" --dport "$port" -j REJECT
+  fi
+}
+
+allow_only_executor 192.168.56.10 9999
+allow_only_executor 192.168.56.11 8091
+allow_only_executor 192.168.56.12 8091

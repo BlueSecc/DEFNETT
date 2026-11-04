@@ -1,3 +1,5 @@
+name: defnett-lab
+
 services:
   server-a:
     build: .
@@ -5,9 +7,13 @@ services:
     command: ["/opt/defnett/app.py"]
     environment:
       HOST_ID: server-a
+      LAB_API_TOKEN: ${DEFNETT_LAB_API_TOKEN:-}
       PATROL_PUBLIC_FILES: "index.txt,etc/hostname,etc/hosts,etc/os-release,etc/motd,home/kartika/notes/note-01.txt,home/kartika/notes/note-02.txt,home/kartika/notes/note-03.txt,home/kartika/notes/note-04.txt,home/kartika/notes/note-05.txt,home/kartika/notes/note-06.txt,home/kartika/notes/note-07.txt,home/kartika/notes/note-08.txt,home/kartika/notes/note-09.txt,home/kartika/notes/note-10.txt,home/kartika/notes/note-11.txt,home/kartika/notes/note-12.txt,home/kartika/notes/note-13.txt,home/kartika/notes/note-14.txt,home/kartika/notes/note-15.txt,home/kartika/notes/note-16.txt,home/kartika/notes/note-17.txt,home/kartika/notes/note-18.txt,home/kartika/notes/note-19.txt,home/kartika/notes/note-20.txt,home/kartika/notes/note-21.txt,home/kartika/notes/note-22.txt,home/kartika/notes/note-23.txt,home/kartika/notes/note-24.txt,home/kartika/notes/note-25.txt,home/kartika/notes/note-26.txt,home/kartika/notes/note-27.txt,home/kartika/notes/note-28.txt,home/kartika/notes/note-29.txt,home/kartika/notes/note-30.txt,home/kartika/reports/audit-01.txt,home/kartika/reports/audit-02.txt"
+      PATROL_EVENT_URL: https://collector:8443/api/patrol/events
+      SSL_CERT_FILE: /tls/ca.crt
     volumes:
       - server_a_data:/data
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/ca.crt:/tls/ca.crt:ro
     networks:
       - serving
       - telemetry
@@ -30,9 +36,13 @@ services:
     command: ["/opt/defnett/app.py"]
     environment:
       HOST_ID: server-b
+      LAB_API_TOKEN: ${DEFNETT_LAB_API_TOKEN:-}
       PATROL_PUBLIC_FILES: "index.txt,etc/hostname,etc/hosts,etc/os-release,etc/motd,home/kartika/notes/note-01.txt,home/kartika/notes/note-02.txt,home/kartika/notes/note-03.txt,home/kartika/notes/note-04.txt,home/kartika/notes/note-05.txt,home/kartika/notes/note-06.txt,home/kartika/notes/note-07.txt,home/kartika/notes/note-08.txt,home/kartika/notes/note-09.txt,home/kartika/notes/note-10.txt,home/kartika/notes/note-11.txt,home/kartika/notes/note-12.txt,home/kartika/notes/note-13.txt,home/kartika/notes/note-14.txt,home/kartika/notes/note-15.txt,home/kartika/notes/note-16.txt,home/kartika/notes/note-17.txt,home/kartika/notes/note-18.txt,home/kartika/notes/note-19.txt,home/kartika/notes/note-20.txt,home/kartika/notes/note-21.txt,home/kartika/notes/note-22.txt,home/kartika/notes/note-23.txt,home/kartika/notes/note-24.txt,home/kartika/notes/note-25.txt,home/kartika/notes/note-26.txt,home/kartika/notes/note-27.txt,home/kartika/notes/note-28.txt,home/kartika/notes/note-29.txt,home/kartika/notes/note-30.txt,home/kartika/reports/audit-01.txt,home/kartika/reports/audit-02.txt"
+      PATROL_EVENT_URL: https://collector:8443/api/patrol/events
+      SSL_CERT_FILE: /tls/ca.crt
     volumes:
       - server_b_data:/data
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/ca.crt:/tls/ca.crt:ro
     networks:
       - serving
       - telemetry
@@ -56,22 +66,37 @@ services:
     environment:
       DB_PATH: /evidence/events.sqlite3
       ALLOWED_HOSTS: server-a,server-b
-      REMEDIATOR_URL_SERVER_A: http://remediator-a:8091/v1/repair
-      REMEDIATOR_URL_SERVER_B: http://remediator-b:8091/v1/repair
+      EXECUTOR_URL: https://executor:8092
+      EXECUTOR_API_TOKEN: ${DEFNETT_EXECUTOR_TOKEN:-}
+      APPROVAL_AUTHORITY_URL: https://approval-authority:8093
+      APPROVAL_COLLECTOR_TOKEN: ${DEFNETT_APPROVAL_COLLECTOR_TOKEN:-}
+      APPROVAL_CA_FILE: /tls/ca.crt
+      SSL_CERT_FILE: /tls/ca.crt
+      DASHBOARD_TLS_CERT_FILE: /tls/collector.crt
+      DASHBOARD_TLS_KEY_FILE: /tls/collector.key
+      OT_API_TOKEN: ${DEFNETT_OT_API_TOKEN:-}
+      OT_ALLOWED_DEVICE_ID: OT-SIM-01
+      OT_GATEWAY_HOST: ot-gateway
+      OT_GATEWAY_PORT: "5020"
+      APPROVAL_TLS_REQUIRED: "true"
+      OPERATOR_SESSION_TTL_SECONDS: "43200"
     ports:
-      - "127.0.0.1:8090:8090"
+      - "127.0.0.1:8443:8443"
     volumes:
       - evidence_data:/evidence
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/ca.crt:/tls/ca.crt:ro
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/collector.crt:/tls/collector.crt:ro
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/collector.key:/tls/collector.key:ro
     networks:
       - telemetry
       - host_access
-      - response_control
-      - repair_a
-      - repair_b
+      - execution_request
+      - ot_lab
+      - authority_api
     depends_on:
-      remediator-a:
+      executor:
         condition: service_healthy
-      remediator-b:
+      approval-authority:
         condition: service_healthy
     read_only: true
     tmpfs:
@@ -81,7 +106,125 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/healthz', timeout=2)"]
+      test: ["CMD", "python", "-c", "import ssl,urllib.request; c=ssl.create_default_context(cafile='/tls/ca.crt'); urllib.request.urlopen('https://localhost:8443/healthz',timeout=2,context=c)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+
+  ot-gateway:
+    build: .
+    image: defnett-lab:local
+    command: ["/opt/defnett/modbus_lab.py", "--policy", "/opt/defnett/ot-policy.json"]
+    environment:
+      OT_BIND_HOST: 0.0.0.0
+      OT_PORT: "5020"
+      OT_COLLECTOR_URL: https://collector:8443
+      SSL_CERT_FILE: /tls/ca.crt
+      OT_OUTBOX_PATH: /state/ot-outbox.sqlite3
+      LAB_API_TOKEN: ${DEFNETT_OT_API_TOKEN:-}
+    volumes:
+      - ./ot-policy.json:/opt/defnett/ot-policy.json:ro
+      - ot_state:/state
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/ca.crt:/tls/ca.crt:ro
+    networks:
+      - ot_lab
+    depends_on:
+      collector:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('127.0.0.1',5020),timeout=2); s.close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+
+  executor:
+    build: .
+    image: defnett-lab:local
+    command: ["/opt/defnett/executor.py"]
+    environment:
+      DB_PATH: /evidence/events.sqlite3
+      ALLOWED_HOSTS: server-a,server-b
+      EXECUTOR_API_TOKEN: ${DEFNETT_EXECUTOR_TOKEN:-}
+      APPROVAL_AUTHORITY_URL: https://approval-authority:8093
+      APPROVAL_EXECUTOR_TOKEN: ${DEFNETT_APPROVAL_EXECUTOR_TOKEN:-}
+      APPROVAL_CA_FILE: /tls/ca.crt
+      SSL_CERT_FILE: /tls/ca.crt
+      TLS_CERT_FILE: /tls/executor.crt
+      TLS_KEY_FILE: /tls/executor.key
+      LAB_API_TOKEN: ${DEFNETT_LAB_API_TOKEN:-}
+      HAPROXY_HOST: 172.31.254.2
+      OPERATOR_APPROVAL_TTL_SECONDS: "600"
+      REMEDIATOR_URL_SERVER_A: https://remediator-a:8091/v1/repair
+      REMEDIATOR_URL_SERVER_B: https://remediator-b:8091/v1/repair
+    volumes:
+      - evidence_data:/evidence
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/ca.crt:/tls/ca.crt:ro
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/executor.crt:/tls/executor.crt:ro
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/executor.key:/tls/executor.key:ro
+    networks:
+      - response_control
+      - repair_a
+      - repair_b
+      - execution_request
+      - authority_api
+    depends_on:
+      approval-authority:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import ssl,urllib.request; c=ssl.create_default_context(cafile='/tls/ca.crt'); urllib.request.urlopen('https://executor:8092/healthz', timeout=2, context=c)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+
+  approval-authority:
+    build: .
+    image: defnett-lab:local
+    command: ["/opt/defnett/approval_authority.py"]
+    environment:
+      DB_PATH: /approval/authority.sqlite3
+      OPERATOR_AUTH_FILE: /ops/operator_auth.json
+      APPROVAL_COLLECTOR_TOKEN: ${DEFNETT_APPROVAL_COLLECTOR_TOKEN:-}
+      APPROVAL_EXECUTOR_TOKEN: ${DEFNETT_APPROVAL_EXECUTOR_TOKEN:-}
+      OPERATOR_SESSION_TTL_SECONDS: "43200"
+      APPROVAL_TLS_REQUIRED: "true"
+      TLS_CERT_FILE: /tls/approval-authority.crt
+      TLS_KEY_FILE: /tls/approval-authority.key
+      TLS_CA_FILE: /tls/ca.crt
+      SSL_CERT_FILE: /tls/ca.crt
+    volumes:
+      - approval_data:/approval
+      - operator_data:/ops
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/ca.crt:/tls/ca.crt:ro
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/approval-authority.crt:/tls/approval-authority.crt:ro
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/approval-authority.key:/tls/approval-authority.key:ro
+    networks:
+      - authority_api
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import ssl,urllib.request; c=ssl.create_default_context(cafile='/tls/ca.crt'); urllib.request.urlopen('https://approval-authority:8093/healthz',timeout=2,context=c)"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -95,10 +238,19 @@ services:
       TARGET_ROOT: /target
       QUARANTINE_ROOT: /quarantine/server-a
       TARGET_HOST_ID: server-a
+      LAB_API_TOKEN: ${DEFNETT_LAB_API_TOKEN:-}
+      MANIFEST_PATH: /manifest/keys.json
+      SSL_CERT_FILE: /tls/ca.crt
+      TLS_CERT_FILE: /tls/remediator-a.crt
+      TLS_KEY_FILE: /tls/remediator-a.key
     volumes:
       - server_a_data:/target
       - quarantine_a_data:/quarantine
-      - master_a_data:/master
+      - master_a_data:/master:ro
+      - manifest_a_data:/manifest:ro
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/ca.crt:/tls/ca.crt:ro
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/remediator-a.crt:/tls/remediator-a.crt:ro
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/remediator-a.key:/tls/remediator-a.key:ro
     networks:
       - repair_a
     read_only: true
@@ -109,7 +261,7 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/healthz', timeout=2)"]
+      test: ["CMD", "python", "-c", "import ssl,urllib.request; c=ssl.create_default_context(cafile='/tls/ca.crt'); urllib.request.urlopen('https://remediator-a:8091/healthz',timeout=2,context=c)"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -123,10 +275,19 @@ services:
       TARGET_ROOT: /target
       QUARANTINE_ROOT: /quarantine/server-b
       TARGET_HOST_ID: server-b
+      LAB_API_TOKEN: ${DEFNETT_LAB_API_TOKEN:-}
+      MANIFEST_PATH: /manifest/keys.json
+      SSL_CERT_FILE: /tls/ca.crt
+      TLS_CERT_FILE: /tls/remediator-b.crt
+      TLS_KEY_FILE: /tls/remediator-b.key
     volumes:
       - server_b_data:/target
       - quarantine_b_data:/quarantine
-      - master_b_data:/master
+      - master_b_data:/master:ro
+      - manifest_b_data:/manifest:ro
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/ca.crt:/tls/ca.crt:ro
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/remediator-b.crt:/tls/remediator-b.crt:ro
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/remediator-b.key:/tls/remediator-b.key:ro
     networks:
       - repair_b
     read_only: true
@@ -137,7 +298,7 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/healthz', timeout=2)"]
+      test: ["CMD", "python", "-c", "import ssl,urllib.request; c=ssl.create_default_context(cafile='/tls/ca.crt'); urllib.request.urlopen('https://remediator-b:8091/healthz',timeout=2,context=c)"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -149,13 +310,16 @@ services:
     command: ["/opt/defnett/agent.py"]
     environment:
       HOST_ID: server-a
+      LAB_API_TOKEN: ${DEFNETT_LAB_API_TOKEN:-}
       WATCH_ROOT: /watched
       STATE_PATH: /state/baseline.json
-      COLLECTOR_URL: http://collector:8090/v1/events
+      COLLECTOR_URL: https://collector:8443/v1/events
+      SSL_CERT_FILE: /tls/ca.crt
       POLL_SECONDS: "3"
     volumes:
       - server_a_data:/watched:ro
       - agent_a_state:/state
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/ca.crt:/tls/ca.crt:ro
     networks:
       - telemetry
     depends_on:
@@ -177,13 +341,16 @@ services:
     command: ["/opt/defnett/agent.py"]
     environment:
       HOST_ID: server-b
+      LAB_API_TOKEN: ${DEFNETT_LAB_API_TOKEN:-}
       WATCH_ROOT: /watched
       STATE_PATH: /state/baseline.json
-      COLLECTOR_URL: http://collector:8090/v1/events
+      COLLECTOR_URL: https://collector:8443/v1/events
+      SSL_CERT_FILE: /tls/ca.crt
       POLL_SECONDS: "3"
     volumes:
       - server_b_data:/watched:ro
       - agent_b_state:/state
+      - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/ca.crt:/tls/ca.crt:ro
     networks:
       - telemetry
     depends_on:
@@ -205,9 +372,10 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     networks:
-      - serving
-      - host_access
-      - response_control
+      serving: {}
+      host_access: {}
+      response_control:
+        ipv4_address: 172.31.254.2
     depends_on:
       server-a:
         condition: service_healthy
@@ -230,9 +398,18 @@ networks:
     driver: bridge
   response_control:
     internal: true
+    ipam:
+      config:
+        - subnet: 172.31.254.0/29
   repair_a:
     internal: true
   repair_b:
+    internal: true
+  execution_request:
+    internal: true
+  ot_lab:
+    internal: true
+  authority_api:
     internal: true
 
 volumes:
@@ -245,3 +422,8 @@ volumes:
   quarantine_b_data:
   master_a_data:
   master_b_data:
+  manifest_a_data:
+  manifest_b_data:
+  operator_data:
+  approval_data:
+  ot_state:

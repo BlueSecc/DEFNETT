@@ -1,0 +1,217 @@
+{
+  "tested_at": "2026-11-03T19:32:15.573170+00:00",
+  "results": [
+    {
+      "id": "TLS-01",
+      "test": "Dashboard HTTPS dengan CA lab",
+      "expected": "HTTP 200",
+      "actual": "HTTP 200",
+      "status": "PASS"
+    },
+    {
+      "id": "TLS-02",
+      "test": "CA tidak dikenal (trust store sistem)",
+      "expected": "ditolak",
+      "actual": "ditolak: unable to get local issuer certificate",
+      "status": "PASS"
+    },
+    {
+      "id": "TLS-03",
+      "test": "Hostname salah",
+      "expected": "ditolak hostname mismatch",
+      "actual": "ditolak: Hostname mismatch, certificate is not valid for 'salah.defnett.lab'.",
+      "status": "PASS"
+    },
+    {
+      "id": "TLS-04",
+      "test": "Sertifikat kedaluwarsa (sertifikat uji khusus)",
+      "expected": "ditolak certificate has expired",
+      "actual": "ditolak: certificate has expired",
+      "status": "PASS"
+    },
+    {
+      "id": "TLS-05",
+      "test": "HTTP polos ke port HTTPS 8443",
+      "expected": "bukan HTTP 200",
+      "actual": "ConnectionResetError: [Errno 54] Connection reset by peer",
+      "status": "PASS"
+    },
+    {
+      "id": "TLS-06",
+      "test": "Port dashboard lama 8090",
+      "expected": "tidak terhubung",
+      "actual": "DITOLAK (refused)",
+      "status": "PASS"
+    },
+    {
+      "id": "TOK-01",
+      "test": "Heartbeat agent tanpa token",
+      "expected": "HTTP 401",
+      "actual": "HTTP 401",
+      "status": "PASS"
+    },
+    {
+      "id": "TOK-02",
+      "test": "Event agent dengan token salah",
+      "expected": "HTTP 401",
+      "actual": "HTTP 401",
+      "status": "PASS"
+    },
+    {
+      "id": "TOK-03",
+      "test": "API dashboard tanpa sesi",
+      "expected": "HTTP 401",
+      "actual": "HTTP 401",
+      "status": "PASS"
+    },
+    {
+      "id": "TOK-04",
+      "test": "Serang tanpa sesi",
+      "expected": "HTTP 401",
+      "actual": "HTTP 401",
+      "status": "PASS"
+    },
+    {
+      "id": "TOK-05",
+      "test": "Login akun tidak dikenal",
+      "expected": "HTTP 401",
+      "actual": "HTTP 401",
+      "status": "PASS"
+    },
+    {
+      "id": "NET-01",
+      "test": "Host -> Approval Authority :8093",
+      "expected": "tidak terhubung",
+      "actual": "TIMEOUT (difilter)",
+      "status": "PASS"
+    },
+    {
+      "id": "NET-02",
+      "test": "Host -> Executor :8092",
+      "expected": "tidak terhubung",
+      "actual": "TIMEOUT (difilter)",
+      "status": "PASS"
+    },
+    {
+      "id": "NET-03",
+      "test": "Host -> HAProxy runtime :9999",
+      "expected": "tidak terhubung",
+      "actual": "TIMEOUT (difilter)",
+      "status": "PASS"
+    },
+    {
+      "id": "NET-04",
+      "test": "Host -> Remediator A :8091",
+      "expected": "tidak terhubung",
+      "actual": "TIMEOUT (difilter)",
+      "status": "PASS"
+    },
+    {
+      "id": "NET-05",
+      "test": "Host -> Remediator B :8091",
+      "expected": "tidak terhubung",
+      "actual": "TIMEOUT (difilter)",
+      "status": "PASS"
+    },
+    {
+      "id": "NET-06",
+      "test": "Host -> Blog lewat HAProxy :8080",
+      "expected": "TERHUBUNG",
+      "actual": "TERHUBUNG",
+      "status": "PASS"
+    },
+    {
+      "id": "ISO-01",
+      "test": "Collector (UID non-executor) -> HAProxy runtime :9999",
+      "expected": "tidak terhubung",
+      "actual": "DITOLAK (refused)",
+      "status": "PASS"
+    },
+    {
+      "id": "ISO-02",
+      "test": "Collector (UID non-executor) -> Remediator A :8091",
+      "expected": "tidak terhubung",
+      "actual": "DITOLAK (refused)",
+      "status": "PASS"
+    },
+    {
+      "id": "ISO-03",
+      "test": "Collector (UID non-executor) -> Remediator B :8091",
+      "expected": "tidak terhubung",
+      "actual": "DITOLAK (refused)",
+      "status": "PASS"
+    },
+    {
+      "id": "ISO-04",
+      "test": "Server A -> Remediator B :8091 (lateral)",
+      "expected": "tidak terhubung",
+      "actual": "TIMEOUT (difilter)",
+      "status": "PASS"
+    },
+    {
+      "id": "ISO-05",
+      "test": "Server A -> HAProxy runtime :9999",
+      "expected": "tidak terhubung",
+      "actual": "TIMEOUT (difilter)",
+      "status": "PASS"
+    },
+    {
+      "id": "ISO-06",
+      "test": "Server B -> Remediator A :8091 (lateral)",
+      "expected": "tidak terhubung",
+      "actual": "TIMEOUT (difilter)",
+      "status": "PASS"
+    },
+    {
+      "id": "ISO-07",
+      "test": "Server A -> Approval Authority :8093",
+      "expected": "tidak terhubung",
+      "actual": "TIMEOUT (difilter)",
+      "status": "PASS"
+    },
+    {
+      "id": "ISO-08",
+      "test": "Server A -> Collector HTTPS :8443 (telemetri)",
+      "expected": "TERHUBUNG",
+      "actual": "TERHUBUNG",
+      "status": "PASS"
+    },
+    {
+      "id": "ISO-09",
+      "test": "User biasa membaca direktori database Authority",
+      "expected": "Permission denied",
+      "actual": "ls: cannot open directory '/var/lib/defnett-approval': Permission denied",
+      "status": "PASS"
+    },
+    {
+      "id": "ISO-10",
+      "test": "User biasa membaca env token Authority/Executor",
+      "expected": "Permission denied",
+      "actual": "cat: /etc/defnett/approval-authority.env: Permission denied cat: /etc/defnett/executor.env: Permission denied",
+      "status": "PASS"
+    },
+    {
+      "id": "ISO-11",
+      "test": "Authority API internal tanpa token service",
+      "expected": "401",
+      "actual": "401",
+      "status": "PASS"
+    },
+    {
+      "id": "ISO-12",
+      "test": "Authority API internal dengan token salah",
+      "expected": "401",
+      "actual": "401",
+      "status": "PASS"
+    },
+    {
+      "id": "ISO-13",
+      "test": "Authority lewat HTTP polos",
+      "expected": "bukan 200",
+      "actual": "000",
+      "status": "PASS"
+    }
+  ],
+  "passed": 30,
+  "total": 30
+}
