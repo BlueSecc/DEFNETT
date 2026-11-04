@@ -1,0 +1,15 @@
+gateway: load=0.00 0.00 0.00 ram_used=358MB/1430MB disk=62%
+root               26284  0.0 haproxy
+haproxy            24608  0.2 haproxy
+server-a: load=0.01 0.02 0.00 ram_used=632MB/1430MB disk=69%
+defnett            67668  0.8 python3
+defnett            30476  0.0 python3
+defnett            24060  0.0 python3
+server-b: load=0.16 0.04 0.01 ram_used=628MB/1430MB disk=69%
+defnett            65036  0.7 python3
+defnett            30496  0.0 python3
+defnett            24856  0.0 python3
+collector: load=0.18 0.12 0.09 ram_used=460MB/1430MB disk=68%
+defnett-collector  72680  1.0 python3
+defnett-executor   39148  0.6 python3
+defnett-approval   32600  0.8 python3

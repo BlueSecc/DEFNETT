@@ -4,22 +4,37 @@ const hostFilter = $("#host-filter");
 const displayedEvents = [];
 const openEvents = new Set();
 let latestDashboard = null;
+const operator = { username: null, role: null, csrf: null };
+window.__operator = operator;
 
 const labels = {
   file_created: "File baru",
   file_modified: "File berubah",
   file_deleted: "File dihapus",
+  OT_MODBUS_TRANSACTION: "Transaksi Modbus lab",
+  OT_FRAME_REJECTED: "Frame Modbus ditolak",
 };
 
 const remediationLabels = {
-  DETECTED: "Canary terdeteksi",
-  ISOLATING: "Mengisolasi host target",
-  ISOLATED: "Host target keluar dari rotasi",
+  DETECTED: "Menunggu persetujuan operator",
+  EXECUTING: "Executor berjalan",
+  ISOLATION_CONFIRMED: "Host target keluar dari rotasi",
+  ISOLATION_UNCONFIRMED: "Isolasi belum terkonfirmasi",
+  MASTER_UNTRUSTED: "Master tidak dipercaya manifes",
   REPAIRING: "Mengarantina artefak target",
   VERIFYING: "Memverifikasi hasil perbaikan",
   REJOINING: "Health check dan rejoin target",
   REPAIRED: "Host target aktif kembali",
-  FAILED: "Pemulihan host target gagal",
+  HEALTH_CHECK_FAILED: "Health check gagal",
+  EXECUTION_FAILED: "Pemulihan host target gagal",
+  REJECTED: "Ditolak operator; tidak ada tindakan",
+};
+
+const approvalLabels = {
+  CONTAIN_CANARY: "Karantina canary",
+  RESTORE_KEYS: "Pulihkan kunci dari master",
+  SIMULATE_LAB_ATTACK: "Simulasi serangan lab",
+  REJOIN_BACKEND: "Rejoin backend",
 };
 
 function setNodeState(id, state, detail) {
@@ -88,10 +103,11 @@ function renderBackends(data) {
 }
 
 function renderRemediation(data) {
-  const enabled = Boolean(data.analysis?.auto_repair_enabled);
+  const approvalsRequired = Boolean(data.analysis?.approvals_required);
+  const executorReady = Boolean(data.analysis?.executor_ready);
   const mode = $("#repair-mode");
-  mode.textContent = enabled ? "Otomatis · canary lab" : "DRY RUN";
-  mode.classList.toggle("active", enabled);
+  mode.textContent = !approvalsRequired ? "Approval" : executorReady ? "Approval · executor siap" : "Approval · executor belum terjangkau";
+  mode.classList.toggle("active", executorReady);
 
   const worker = $("#remediator-health");
   const workerStates = data.remediator?.by_host || {};
@@ -106,7 +122,7 @@ function renderRemediation(data) {
   $("#repair-metrics").hidden = !run;
   if (!run) {
     $("#repair-status").className = "status-indicator waiting";
-    $("#repair-status").textContent = enabled ? "Siap" : "Observasi";
+    $("#repair-status").textContent = "Siap";
     $("#repair-headline").textContent = "Belum ada insiden";
     $("#repair-detail").textContent = "";
     for (const item of items) {
@@ -118,16 +134,16 @@ function renderRemediation(data) {
 
   const history = Array.isArray(run.steps) ? run.steps : [];
   const latest = history.at(-1)?.stage || run.status;
-  const failed = run.status === "FAILED";
+  const failed = run.status === "EXECUTION_FAILED";
   const successful = run.status === "REPAIRED";
-  const failedBeforeIsolation = run.detail?.includes("tidak sehat; ")
-    || run.detail?.includes("belum mengonfirmasi isolasi");
+  const stoppedWithoutChanges = run.detail?.includes("tidak sehat; ")
+    || run.detail?.includes("tidak diubah lebih jauh");
   const badge = $("#repair-status");
   badge.className = `status-indicator ${failed ? "failed" : successful ? "complete" : "running"}`;
   badge.textContent = remediationLabels[run.status] || run.status;
   $("#repair-headline").textContent = successful
     ? `${run.host_id} pulih`
-    : failed ? failedBeforeIsolation
+    : failed ? stoppedWithoutChanges
       ? "Respons dihentikan"
       : "Pemulihan gagal"
       : remediationLabels[run.status] || run.status;
@@ -156,6 +172,109 @@ function renderRemediation(data) {
 
 function formatSeconds(value) {
   return Number.isFinite(value) ? `${value.toLocaleString("id-ID")} dtk` : "-";
+}
+
+async function apiPost(path, body) {
+  const headers = { "Content-Type": "application/json" };
+  if (operator.csrf) headers["X-DEFNETT-CSRF"] = operator.csrf;
+  return fetch(path, { method: "POST", headers, cache: "no-store", body: body === undefined ? "" : JSON.stringify(body) });
+}
+
+function isOperator() {
+  return operator.role === "operator";
+}
+
+function shortApprovalDetail(approval) {
+  const run = approval.execution_detail || approval.reason || "";
+  return run.length > 74 ? `${run.slice(0, 74)}…` : run;
+}
+
+function attackNoticeMsg(text) {
+  try {
+    const payload = JSON.parse(text);
+    console.warn(payload.error || text);
+  } catch (error) {
+    console.warn(text);
+  }
+}
+
+function renderApprovals(approvals) {
+  const list = $("#approval-list");
+  if (!list) return;
+  list.replaceChildren();
+  if (!Array.isArray(approvals) || !approvals.length) {
+    const empty = document.createElement("li");
+    empty.className = "approval-row empty";
+    empty.textContent = "Tidak ada persetujuan berjalan.";
+    list.append(empty);
+    return;
+  }
+  for (const approval of approvals) {
+    const row = document.createElement("li");
+    row.className = "approval-row";
+    const head = document.createElement("div");
+    head.className = "approval-head-row";
+    const title = document.createElement("strong");
+    const detail = document.createElement("span");
+    detail.className = "small-text";
+    detail.textContent = `${approvalLabels[approval.action] || approval.action} · ${approval.host_id} · ${approval.path}`;
+    const status = document.createElement("span");
+    status.className = `approval-status st-${String(approval.approval_status || "").toLowerCase()}`;
+    const state = approval.execution_status && approval.execution_status !== "NONE"
+      ? `${approval.approval_status}/${approval.execution_status}` : approval.approval_status;
+    status.textContent = state;
+    head.append(title, status);
+    title.textContent = formatTime(approval.created_at);
+    const actionRow = document.createElement("div");
+    actionRow.className = "approval-actions";
+    const actions = document.createElement("span");
+    actions.className = "small-text";
+    actions.textContent = shortApprovalDetail(approval);
+    actionRow.append(actions);
+    if (isOperator()) {
+      if (approval.approval_status === "PENDING") {
+        const approveButton = document.createElement("button");
+        approveButton.className = "approval-btn";
+        approveButton.type = "button";
+        approveButton.textContent = "Setujui";
+        approveButton.addEventListener("click", async () => {
+          const response = await apiPost(`/v1/approvals/${approval.id}/approve`);
+          if (!response.ok) attackNoticeMsg(await response.text());
+          refreshApprovals();
+        });
+        const rejectButton = document.createElement("button");
+        rejectButton.className = "approval-btn danger";
+        rejectButton.type = "button";
+        rejectButton.textContent = "Tolak";
+        rejectButton.addEventListener("click", async () => {
+          await apiPost(`/v1/approvals/${approval.id}/reject`, { reason: "operator_rejected" });
+          refreshApprovals();
+        });
+        actionRow.append(approveButton, rejectButton);
+      } else if (approval.approval_status === "APPROVED" && approval.execution_status === "NONE") {
+        const runButton = document.createElement("button");
+        runButton.className = "approval-btn";
+        runButton.type = "button";
+        runButton.textContent = "Jalankan";
+        runButton.addEventListener("click", async () => {
+          const response = await apiPost(`/v1/approvals/${approval.id}/execute`);
+          if (!response.ok) attackNoticeMsg(await response.text());
+          refreshApprovals();
+        });
+        actionRow.append(runButton);
+      }
+    }
+    row.append(head, detail, actionRow);
+    list.append(row);
+  }
+}
+
+async function refreshApprovals() {
+  try {
+    const response = await fetch("/v1/approvals", { cache: "no-store" });
+    if (!response.ok) return;
+    renderApprovals((await response.json()).approvals);
+  } catch (error) { /* offline: overview menampilkan pesan itu */ }
 }
 
 async function refreshEvidence() {
@@ -192,8 +311,13 @@ function renderTraffic(data) {
 function renderState(data) {
   latestDashboard = data;
   const mode = data.mode || "UNKNOWN";
-  $("#lab-mode").textContent = mode === "ACTIVE_LAB" ? "AKTIF" : mode === "DRY_RUN" ? "DRY RUN" : mode;
-  $("#lab-mode").classList.toggle("active", mode === "ACTIVE_LAB");
+  $("#lab-mode").textContent = mode === "OPERATIONAL" ? "MODE APPROVAL" : mode === "DEGRADED" ? "DEGRADED" : mode;
+  $("#lab-mode").classList.toggle("active", mode === "OPERATIONAL");
+  const otStatus = data.ot?.status || "SENSOR_UNAVAILABLE";
+  const otBadge = $("#ot-sensor-status");
+  otBadge.textContent = otStatus;
+  otBadge.title = data.ot?.mode || "OT telemetry status not reported";
+  otBadge.className = `mode-label ${otStatus === "SENSOR_UNAVAILABLE" ? "status-down" : otStatus === "LIVE_LAB_TELEMETRY" ? "status-up" : "status-maint"}`;
 
   for (const suffix of ["a", "b"]) {
     const host = `server-${suffix}`;
@@ -250,6 +374,26 @@ function createEventRow(event) {
   row.classList.toggle("level-warn", level === 2);
   row.append(summary, decision);
 
+  if (event.risk_assessment) {
+    const assessment = event.risk_assessment;
+    const breakdown = document.createElement("p");
+    breakdown.className = "trajectory-relation";
+    const score = assessment.risk_score == null ? "tidak dihitung" : `${assessment.risk_score}/100 ordinal`;
+    const missing = Array.isArray(assessment.missing_evidence) && assessment.missing_evidence.length
+      ? ` · input belum tersedia: ${assessment.missing_evidence.join(", ")}` : "";
+    breakdown.textContent = `Risk ${assessment.risk_level || "UNKNOWN"} · ${score} (bukan probabilitas)${missing}`;
+    row.append(breakdown);
+    if (assessment.dimensions && typeof assessment.dimensions === "object") {
+      for (const [name, dimension] of Object.entries(assessment.dimensions)) {
+        const item = document.createElement("div");
+        item.className = "event-file";
+        const value = dimension?.score == null ? "tidak tersedia" : `${dimension.score}/100`;
+        item.textContent = `${name}: ${value} — ${dimension?.reason || "tanpa alasan"}`;
+        row.append(item);
+      }
+    }
+  }
+
   if (event.old_hash || event.new_hash) {
     const hashes = document.createElement("div");
     hashes.className = "event-hashes";
@@ -286,12 +430,76 @@ function renderEvents() {
   for (const event of rows) eventList.append(createEventRow(event));
 }
 
+function renderTrajectories(items) {
+  const container = $("#trajectory-list");
+  if (!container) return;
+  container.replaceChildren();
+  if (!Array.isArray(items) || !items.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "Belum ada rangkaian event yang memenuhi aturan korelasi.";
+    container.append(empty);
+    return;
+  }
+  for (const trajectory of items) {
+    const card = document.createElement("section");
+    card.className = "trajectory-card";
+    const heading = document.createElement("strong");
+    heading.textContent = `${trajectory.trajectory_id} · ${trajectory.host_id}`;
+    const count = document.createElement("span");
+    count.className = "small-text";
+    count.textContent = `${Number(trajectory.event_count) || 0} event · ${formatTime(trajectory.started_at)}`;
+    const timeline = document.createElement("ol");
+    timeline.className = "trajectory-timeline";
+    for (const event of (Array.isArray(trajectory.events) ? trajectory.events : [])) {
+      const item = document.createElement("li");
+      item.textContent = `${formatTime(event.timestamp)} · ${labels[event.event_type] || event.event_type} · ${event.path || "target tidak tersedia"}`;
+      timeline.append(item);
+    }
+    card.append(heading, count, timeline);
+    for (const edge of (Array.isArray(trajectory.relationships) ? trajectory.relationships : [])) {
+      const relation = document.createElement("p");
+      relation.className = "trajectory-relation";
+      const confidence = Number(edge.confidence);
+      relation.textContent = `${edge.relation || "RELATION"} · confidence ${Number.isFinite(confidence) ? confidence.toFixed(2) : "unknown"} · ${edge.reason || "alasan tidak tersedia"}`;
+      card.append(relation);
+    }
+    container.append(card);
+  }
+}
+
+async function refreshTrajectories() {
+  try {
+    const response = await fetch("/v1/trajectories", { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    renderTrajectories((await response.json()).trajectories);
+  } catch (error) {
+    renderTrajectories([]);
+    const container = $("#trajectory-list");
+    const status = document.createElement("p");
+    status.className = "empty-state";
+    status.textContent = "Data trajectory tidak tersedia saat ini.";
+    container.replaceChildren(status);
+  }
+}
+
 async function refresh() {
   const connection = $("#connection");
   try {
     const response = await fetch("/v1/dashboard", { cache: "no-store" });
+    if (response.status === 401) {
+      // Collector hidup tetapi belum ada sesi: minta login, bukan tampilkan "terputus".
+      showOperatorModal(operator.username ? "" : "Masuk operatormu untuk melihat dashboard.");
+      $("#load-error").hidden = true;
+      connection.className = "connection disconnected";
+      connection.lastChild.textContent = "Belum masuk";
+      return;
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    renderState(await response.json());
+    const data = await response.json();
+    renderState(data);
+    renderApprovals(data.approvals);
+    await refreshTrajectories();
     $("#load-error").hidden = true;
     connection.className = "connection connected";
     connection.lastChild.textContent = "Online";
@@ -363,7 +571,91 @@ function scheduleRefresh() {
   const busy = !$("#patrol-incident").hidden || Date.now() < (window.__patrol?.patrol.fastUntil || 0);
   window.setTimeout(async () => { await refresh(); scheduleRefresh(); }, busy ? 1000 : 2500);
 }
+
+/* Operator & approval */
+function showOperatorModal(message = "") {
+  // Refresh berkala memanggil ini tiap 2,5 dtk saat belum login; jangan rebut fokus
+  // atau timpa pesan galat selagi operator mengetik.
+  const modal = $("#operator-modal");
+  if (!modal.hidden) return;
+  $("#op-error").textContent = message;
+  modal.hidden = false;
+  $("#op-user").focus();
+}
+
+function hideOperatorModal() {
+  $("#operator-modal").hidden = true;
+  $("#op-pass").value = "";
+  $("#op-error").textContent = "";
+}
+
+function setOperatorButton() {
+  const button = $("#operator-button");
+  button.textContent = operator.username ? `${operator.username} · ${operator.role}` : "Masuk operator";
+  button.classList.toggle("active", Boolean(operator.username));
+  $("#logout-button").hidden = !operator.username;
+}
+
+async function operatorLogin() {
+  const username = $("#op-user").value.trim();
+  const password = $("#op-pass").value;
+  if (!username || !password) {
+    $("#op-error").textContent = "Nama pengguna dan sandi wajib diisi.";
+    return;
+  }
+  $("#op-login").disabled = true;
+  try {
+    const response = await apiPost("/v1/operator/login", { username, password });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      $("#op-error").textContent = data.error === "too_many_failures"
+        ? `Terkunci sementara (${data.retry_seconds || 60} dtk).`
+        : data.error === "kredensial_tidak_sah" ? "Kredensial salah." : data.error || `HTTP ${response.status}`;
+      return;
+    }
+    operator.username = data.username;
+    operator.role = data.role;
+    operator.csrf = data.csrf;
+    hideOperatorModal();
+    setOperatorButton();
+    refresh();
+  } finally {
+    $("#op-login").disabled = false;
+  }
+}
+
+async function whoamiRefresh() {
+  try {
+    const response = await fetch("/v1/operator/whoami", { cache: "no-store" });
+    const data = await response.json();
+    if (data?.authenticated) {
+      operator.username = data.username;
+      operator.role = data.role;
+      operator.csrf = data.csrf;
+    }
+  } catch (error) { /* collector offline */ }
+  setOperatorButton();
+}
+
+$("#operator-button").addEventListener("click", () => {
+  // Saat sudah masuk, tombol ini hanya label nama; keluar lewat tombol Keluar.
+  if (!operator.username) showOperatorModal();
+});
+$("#logout-button").addEventListener("click", async () => {
+  await apiPost("/v1/operator/logout");
+  operator.username = null;
+  operator.role = null;
+  operator.csrf = null;
+  setOperatorButton();
+  refresh();
+});
+$("#op-login").addEventListener("click", () => { operatorLogin(); });
+$("#op-cancel").addEventListener("click", hideOperatorModal);
+$("#op-pass").addEventListener("keydown", (event) => { if (event.key === "Enter") operatorLogin(); });
+$("#op-user").addEventListener("keydown", (event) => { if (event.key === "Enter") operatorLogin(); });
+
 refresh();
 scheduleRefresh();
 refreshEvidence();
+whoamiRefresh();
 window.setInterval(refreshEvidence, 15000);

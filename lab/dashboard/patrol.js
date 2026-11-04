@@ -330,11 +330,12 @@ function updateActor(a, dt) {
 
 /* ───────────────────────── scenes (one per server) ───────────────────────── */
 const STAGES = ["DETECTED", "ISOLATING", "ISOLATED", "REPAIRING", "VERIFYING", "REJOINING", "REPAIRED"];
-const MIN_MS = { DETECTED: 2200, ISOLATING: 2000, ISOLATED: 1600, REPAIRING: 6000, VERIFYING: 2200, REJOINING: 2000, REPAIRED: 8000, FAILED: 0 };
+const MIN_MS = { DETECTED: 2200, ISOLATING: 2000, ISOLATED: 1600, REPAIRING: 6000, VERIFYING: 2200, REJOINING: 2000, REPAIRED: 8000, FAILED: 0, REJECTED: 3000 };
 const STAGE_TEXT = {
   DETECTED: ["INTRUDER TERDETEKSI", "#e0584a"], ISOLATING: ["MEMUTUS KONEKSI", "#e68a2e"], ISOLATED: ["SERVER TERISOLASI", "#e0584a"],
   REPAIRING: ["MAINTENANCE", "#e6b23a"], VERIFYING: ["VERIFIKASI FILE", "#5aa9e6"], REJOINING: ["SAMBUNG ULANG", "#3fb7a4"],
   REPAIRED: ["SERVER ONLINE", "#3fbf86"], FAILED: ["PEMULIHAN GAGAL", "#e0584a"],
+  REJECTED: ["DITOLAK OPERATOR", "#e6b23a"],
 };
 const scene = {};
 const police = {};
@@ -706,7 +707,7 @@ function advanceScene(sc) {
   if (sc.queue.length) {
     const wait = sc.vis ? (MIN_MS[sc.vis] ?? 0) : 0;
     if (!sc.vis || sim.t - sc.visSince >= wait) enterStage(sc, sc.queue.shift());
-  } else if (sc.vis === "REPAIRED" && sim.t - sc.visSince >= MIN_MS.REPAIRED) {
+  } else if ((sc.vis === "REPAIRED" || sc.vis === "REJECTED") && sim.t - sc.visSince >= MIN_MS[sc.vis]) {
     endIncident(sc);
   }
 }
@@ -714,8 +715,8 @@ function applyRemediation(run, meta = {}) {
   if (!run || !hosts.includes(run.host_id)) return;
   const sc = scene[run.host_id];
   const steps = Array.isArray(run.steps) ? run.steps : [];
-  const stages = steps.map((s) => s.stage).filter(Boolean);
-  if (!stages.length && run.status) stages.push(run.status);
+  const stages = steps.map((s) => stageAlias(s.stage)).filter(Boolean);
+  if (!stages.length && run.status) stages.push(stageAlias(run.status));
   const firstTs = Date.parse(steps[0]?.timestamp || run.started_at || "") || Date.now();
   if (sc.runId !== run.event_id) {
     if (sc.ignored === run.event_id) return;
@@ -729,13 +730,28 @@ function applyRemediation(run, meta = {}) {
   const analysis = patrol.analysis || {};
   const delayHost = analysis.demo_repair_host;
   sc.delayMs = delayHost === "all" || run.host_id === delayHost ? Number(analysis.demo_repair_delay_seconds || 0) * 1000 : 0;
-  for (const step of steps) if (step.stage && step.timestamp) sc.stageTs[step.stage] = Date.parse(step.timestamp);
+  for (const step of steps) {
+    const alias = stageAlias(step.stage);
+    if (alias && step.timestamp) sc.stageTs[alias] = Date.parse(step.timestamp);
+  }
   for (const stage of stages) if (!sc.seen.has(stage)) { sc.seen.add(stage); sc.queue.push(stage); }
   if (sc.joinedLate && sc.vis === null && sc.queue.length) {
     const last = sc.queue.at(-1);
     sc.queue = []; sc.joinedLate = false;
     enterStage(sc, last, { settle: true });
   }
+}
+/* Status server diambil dari HAProxy asli lewat collector; tidak ada status simulasi. */
+const STAGE_ALIAS = {
+  EXECUTING: "ISOLATING",
+  ISOLATION_CONFIRMED: "ISOLATED",
+  ISOLATION_UNCONFIRMED: "ISOLATED",
+  MASTER_UNTRUSTED: "ISOLATING",
+  HEALTH_CHECK_FAILED: "FAILED",
+  EXECUTION_FAILED: "FAILED",
+};
+function stageAlias(stage) {
+  return stage ? (STAGE_ALIAS[stage] || stage) : "";
 }
 /* Status server diambil dari HAProxy asli lewat collector; tidak ada status simulasi. */
 const LB_TEXT = { UP: ["UP", "#6ee3b0"], MAINT: ["DOWN", "#ff6b5c"], DRAIN: ["DOWN", "#ff6b5c"], DOWN: ["DOWN", "#ff6b5c"], NOLB: ["CEK", "#e6b23a"] };
@@ -789,7 +805,7 @@ function ingestLive(event) {
       else inside.more.push({ ev: event, action });
       return;
     }
-    spawnThief(host, "fim", event, action, { lurk: Boolean(patrol.analysis.auto_repair_enabled), tag: "INTRUDER" });
+    spawnThief(host, "fim", event, action, { tag: "INTRUDER" });
     return;
   }
   if (incidentActive(host)) return;
@@ -826,6 +842,12 @@ const ATTACK_ERRORS = {
   survivor_not_healthy: "Server lain tidak sehat",
   attack_simulation_disabled: "Simulasi nonaktif di server",
   key_not_pristine: "Kunci belum pulih",
+  unauthorized: "Masuk sebagai operator dulu",
+  csrf_required: "Sesi operator kedaluwarsa, masuk lagi",
+  too_many_failures: "Terlalu banyak gagal, coba lagi nanti",
+  unknown_host: "Host tidak dikenal",
+  unknown_vector: "Vektor tidak dikenal",
+  executor_unreachable: "Executor tidak terjangkau",
 };
 function attackNotice(text) {
   const node = $("#attack-status");
@@ -840,9 +862,18 @@ async function launchAttack(host) {
   updateAttackButton();
   attackNotice("");
   try {
-    const response = await fetch(`/v1/lab/attack/${host}?vector=${patrol.attackVector}`, { method: "POST" });
+    const headers = { "Content-Type": "application/json" };
+    const operator = window.__operator || {};
+    if (operator.csrf) headers["X-DEFNETT-CSRF"] = operator.csrf;
+    const response = await fetch(`/v1/lab/attack/${host}?vector=${patrol.attackVector}`, { method: "POST", headers });
     const body = await response.json().catch(() => ({}));
+    if (response.status === 401) throw new Error("Masuk sebagai operator dulu");
     if (!response.ok) throw new Error(ATTACK_ERRORS[body.error] || body.error || `HTTP ${response.status}`);
+    if (body.approved) {
+      attackNotice("Serangan lab dijalankan sebagai approval operator.");
+    } else if (body.note) {
+      attackNotice(body.note);
+    }
     patrol.fastUntil = Date.now() + 60000;
     pollDashboard();
     window.setTimeout(() => { sc.attackPending = false; updateAttackButton(); }, 25000);

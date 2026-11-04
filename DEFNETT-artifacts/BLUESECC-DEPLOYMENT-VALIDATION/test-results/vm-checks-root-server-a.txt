@@ -1,0 +1,23 @@
+== server-a 2026-11-03T18:35:57Z
+PERBAIKAN  aturan lama 192.168.56.1 -> 8091 (remediator admin) dihapus
+FW-01 PASS  Host admin tidak lagi diizinkan ke remediator :8091 | expected=0 actual=0
+UNIT defnett-agent user=defnett aktif=active
+UNIT defnett-remediator user=defnett aktif=active
+UNIT defnett-app user=defnett aktif=active
+SRV-01 PASS  Agent (defnett) menulis /master | expected=DITOLAK actual=DITOLAK
+SRV-02 PASS  Remediator (defnett) membaca master | expected=BISA actual=BISA
+SRV-03 PASS  Remediator (defnett) mengubah manifes | expected=DITOLAK actual=DITOLAK
+SRV-04 PASS  Manifes cocok dengan master | expected=OK actual=OK
+UFW Status: active
+UFW 
+UFW To                         Action      From
+UFW --                         ------      ----
+UFW 22/tcp                     ALLOW       192.168.56.1               # SSH admin host
+UFW 8080/tcp                   ALLOW       192.168.56.1               # app admin
+UFW 8080/tcp                   ALLOW       192.168.56.10              # healthcheck haproxy
+UFW 8080/tcp                   ALLOW       192.168.56.20              # probe trafik collector
+UFW 8091/tcp                   ALLOW       192.168.56.20              # repair collector
+UFW 80/tcp                     ALLOW       192.168.56.10             
+UFW 80/tcp                     ALLOW       192.168.56.1              
+UFW 
+== selesai: PASS=5 FAIL=0, hasil di /tmp/defnett-checks-server-a.txt

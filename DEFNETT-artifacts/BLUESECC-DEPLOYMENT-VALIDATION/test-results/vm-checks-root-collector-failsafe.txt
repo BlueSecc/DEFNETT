@@ -1,0 +1,6 @@
+== collector 2026-11-03T18:38:19Z
+FS-01 PASS  Login saat Authority mati (fail-closed) | expected=503 actual=503
+FS-02 PASS  Serang saat Authority mati | expected=401 actual=401
+FS-03 INFO  Executor mencatat 4 baris galat klaim saat Authority mati (tidak ada eksekusi)
+FS-04 PASS  Authority menyala kembali | expected=active actual=active
+== selesai: PASS=3 FAIL=0, hasil di /tmp/defnett-checks-collector.txt

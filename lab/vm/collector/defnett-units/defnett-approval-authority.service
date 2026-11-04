@@ -1,0 +1,27 @@
+[Unit]
+Description=DEFNETT single-writer approval authority
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=defnett-approval
+Group=defnett-approval
+SupplementaryGroups=defnett-approval-auth
+UMask=0077
+EnvironmentFile=/etc/defnett/approval-authority.env
+ExecStart=/usr/bin/python3 /opt/defnett/approval_authority.py
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/defnett-approval
+IPAddressDeny=any
+IPAddressAllow=127.0.0.0/8 ::1/128
+
+[Install]
+WantedBy=multi-user.target

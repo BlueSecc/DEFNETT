@@ -1,0 +1,14 @@
+== gateway 2026-11-03T18:35:47Z
+UNIT haproxy aktif=active
+GW-01 PASS  Runtime HAProxy hanya diizinkan dari Collector | expected=1 actual=1
+GW-02 PASS  Tidak ada aturan 9999 untuk alamat lain | expected=0 actual=0
+UFW Status: active
+UFW 
+UFW To                         Action      From
+UFW --                         ------      ----
+UFW 22/tcp                     ALLOW       192.168.56.1               # SSH admin host
+UFW 8080/tcp                   ALLOW       192.168.56.1               # app host
+UFW 8080/tcp                   ALLOW       192.168.56.20              # probe collector
+UFW 9999/tcp                   ALLOW       192.168.56.20              # API runtime collector
+UFW 
+== selesai: PASS=2 FAIL=0, hasil di /tmp/defnett-checks-gateway.txt

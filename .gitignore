@@ -16,3 +16,6 @@ venv/
 
 # Node
 node_modules/
+
+# Dataset eksperimen (besar, unduh dari sumbernya; lihat README)
+datasets/

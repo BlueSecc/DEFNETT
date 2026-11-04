@@ -22,6 +22,8 @@
           <button id="tab-patrol" type="button" role="tab" aria-selected="false" aria-controls="patrol-view">Patrol</button>
         </nav>
         <span id="connection" class="connection" role="status"><span class="status-dot"></span>Menghubungkan…</span>
+        <button id="operator-button" class="refresh-button" type="button">Masuk operator</button>
+        <button id="logout-button" class="refresh-button" type="button" hidden>Keluar</button>
         <button id="sidebar-open" class="refresh-button" type="button">Detail</button>
       </div>
     </header>
@@ -53,6 +55,10 @@
           <div class="kpi-item suspicious">
             <span class="kpi-label">RISIKO</span>
             <strong id="patrol-suspicious-count">0</strong>
+          </div>
+          <div class="kpi-item ot-status">
+            <span class="kpi-label">OT LAB</span>
+            <strong id="ot-sensor-status" class="mode-label">?</strong>
           </div>
           <div class="kpi-item compromised">
             <span class="kpi-label">KRITIS</span>
@@ -149,6 +155,18 @@
         <div id="load-error" class="notice error-notice" role="alert" hidden>
           <strong>Collector tidak dapat dijangkau.</strong>
         </div>
+        <div id="operator-modal" class="op-modal" hidden>
+          <div class="op-box">
+            <strong>Masuk operator</strong>
+            <input id="op-user" autocomplete="username" placeholder="admin">
+            <input id="op-pass" type="password" autocomplete="current-password" placeholder="kata sandi">
+            <div class="op-actions">
+              <button id="op-login" class="btn btn-primary" type="button">Masuk</button>
+              <button id="op-cancel" class="btn" type="button">Batal</button>
+            </div>
+            <span id="op-error" class="op-error" role="alert"></span>
+          </div>
+        </div>
       </main>
 
       <!-- SIDEBAR DETAIL (Drawer) -->
@@ -161,6 +179,7 @@
         <div class="sidebar-tabs">
           <button class="s-tab active" data-target="s-events">Events</button>
           <button class="s-tab" data-target="s-files">File</button>
+          <button class="s-tab" data-target="s-trajectories">Trajectory</button>
           <button class="s-tab" data-target="s-playbook">Playbook</button>
           <button class="s-tab" data-target="s-traffic">Trafik</button>
         </div>
@@ -187,8 +206,21 @@
             <ul id="fs-list" class="fs-list"></ul>
           </div>
 
+          <!-- Panel korelasi event berbasis bukti -->
+          <div id="s-trajectories" class="s-panel">
+            <p class="small-text">Relasi terbatas pada host dan path yang sama. Korelasi menunjukkan keterkaitan bukti, bukan sebab-akibat.</p>
+            <div id="trajectory-list" class="trajectory-list" aria-live="polite"></div>
+          </div>
+
           <!-- Panel Playbook -->
           <div id="s-playbook" class="s-panel">
+            <div class="approvals-block" id="approvals-block">
+              <div class="approval-head">
+                <strong>Persetujuan</strong>
+                <span class="small-text">Playbook hanya jalan setelah operator menyetujui di sini.</span>
+              </div>
+              <ul id="approval-list" class="approval-list"></ul>
+            </div>
             <div class="playbook-status">
               <div id="repair-mode" class="badge">Mode</div>
               <div id="remediator-health" class="badge">Worker</div>
@@ -210,14 +242,14 @@
               <dt>Start</dt><dd id="repair-started">-</dd>
             </dl>
             <ol id="repair-steps" class="repair-timeline">
-              <li data-stage="DETECTED"><span class="step-index">1</span><span>Terdeteksi</span></li>
-              <li data-stage="ISOLATING"><span class="step-index">2</span><span>Isolasi</span></li>
-              <li data-stage="ISOLATED"><span class="step-index">3</span><span>Keluar rotasi</span></li>
+              <li data-stage="DETECTED"><span class="step-index">1</span><span>Terdeteksi · menunggu persetujuan</span></li>
+              <li data-stage="EXECUTING"><span class="step-index">2</span><span>Executor berjalan</span></li>
+              <li data-stage="ISOLATION_CONFIRMED"><span class="step-index">3</span><span>Keluar rotasi</span></li>
               <li data-stage="REPAIRING"><span class="step-index">4</span><span>Perbaikan</span></li>
               <li data-stage="VERIFYING"><span class="step-index">5</span><span>Verifikasi</span></li>
               <li data-stage="REJOINING"><span class="step-index">6</span><span>Health check</span></li>
               <li data-stage="REPAIRED"><span class="step-index">7</span><span>Pulih</span></li>
-              <li data-stage="FAILED"><span class="step-index">!</span><span>Gagal</span></li>
+              <li data-stage="EXECUTION_FAILED"><span class="step-index">!</span><span>Gagal</span></li>
             </ol>
           </div>
 

@@ -1,18 +1,15 @@
 #!/bin/sh
-# DEFNETT lab - pasang serangan demo yang terhubung ke HAProxy asli. Jalankan sebagai root di tiap VM.
-# Urutan: server-a, server-b dulu (worker), collector terakhir.
+# DEFNETT lab - pasang tombol Serang! demo: serangan lab asli di VM.
+# Jalankan sebagai root di tiap VM, urutan server-a, server-b dulu, collector terakhir.
 # Pemakaian: sh deploy-real-attack.sh server-a|server-b|collector [folder-sumber]
-# File lama disalin dulu ke <nama>.bak-<waktu>. Collector berpindah dari DRY_RUN ke ACTIVE_LAB.
+# Deploy komponen inti (collector, executor, modul tahap 1, dashboard) dikerjakan
+# deploy-update.sh; skrip ini hanya menyetel lingkungan khusus demo serangan.
+# Tombol Serang! sejak tahap 1 membuat persetujuan operator, bukan eksekusi langsung.
 set -eu
 
 ROLE="${1:-}"
 SOURCE="${2:-/tmp/defnett-deploy}"
-STAMP="$(date +%Y%m%d%H%M%S)"
-
-put() {
-  [ ! -e "$2" ] || cp -p "$2" "$2.bak-$STAMP"
-  install -m "$3" -o root -g "$4" "$1" "$2"
-}
+HERE="$(cd "$(dirname "$0")" && pwd)"
 
 setenv() {
   if grep -q "^$2=" "$1"; then
@@ -24,19 +21,13 @@ setenv() {
 
 case "$ROLE" in
   server-a|server-b)
-    cp -p "/etc/defnett/$ROLE.env" "/etc/defnett/$ROLE.env.bak-$STAMP"
-    put "$SOURCE/remediator.py" /opt/defnett/remediator.py 644 root
+    sh "$HERE/deploy-update.sh" "$SOURCE"
     setenv "/etc/defnett/$ROLE.env" LAB_ATTACK_SIMULATION true
     systemctl restart defnett-remediator
     systemctl is-active defnett-remediator
     ;;
   collector)
-    cp -p /etc/defnett/collector.env "/etc/defnett/collector.env.bak-$STAMP"
-    put "$SOURCE/collector.py" /opt/defnett/collector.py 644 root
-    for name in index.html dashboard.css dashboard.js patrol.css patrol.js; do
-      put "$SOURCE/dashboard/$name" "/opt/defnett/dashboard/$name" 644 root
-    done
-    setenv /etc/defnett/collector.env ENABLE_LAB_AUTOREPAIR true
+    sh "$HERE/deploy-update.sh" "$SOURCE"
     setenv /etc/defnett/collector.env DEMO_REPAIR_HOST all
     setenv /etc/defnett/collector.env DEMO_REPAIR_DELAY_SECONDS 15
     systemctl restart defnett-collector

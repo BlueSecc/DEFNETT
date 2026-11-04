@@ -18,7 +18,7 @@ ProtectHome=yes
 PrivateTmp=yes
 CapabilityBoundingSet=
 AmbientCapabilities=
-ReadWritePaths=/data /master /quarantine
+ReadWritePaths=/data /quarantine
 
 [Install]
 WantedBy=multi-user.target

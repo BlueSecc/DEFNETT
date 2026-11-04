@@ -1,9 +1,12 @@
 services:
   collector:
     environment:
-      ENABLE_LAB_AUTOREPAIR: "true"
       DEMO_REPAIR_HOST: all
       DEMO_REPAIR_DELAY_SECONDS: "15"
+  executor:
+    environment:
+      DEMO_REPAIR_HOST: all
+      OPERATOR_APPROVAL_TTL_SECONDS: "900"
   remediator-a:
     environment:
       LAB_ATTACK_SIMULATION: "true"

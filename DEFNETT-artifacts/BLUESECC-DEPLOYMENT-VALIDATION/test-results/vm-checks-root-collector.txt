@@ -1,0 +1,44 @@
+== collector 2026-11-03T18:35:33Z
+UNIT defnett-approval-authority user=defnett-approval group=defnett-approval aktif=active enabled=enabled
+UNIT defnett-executor user=defnett-executor group=defnett-executor aktif=active enabled=enabled
+UNIT defnett-collector user=defnett-collector group=defnett-collector aktif=active enabled=enabled
+SYS-01 PASS  systemd-analyze verify tiga unit Collector | expected=0 actual=0
+UID-01 PASS  defnett-collector -> HAProxy runtime :9999 | expected=DITOLAK actual=DITOLAK
+UID-02 PASS  defnett-collector -> Remediator A :8091 | expected=DITOLAK actual=DITOLAK
+UID-03 PASS  defnett-collector -> Remediator B :8091 | expected=DITOLAK actual=DITOLAK
+UID-04 PASS  defnett-executor -> HAProxy runtime :9999 | expected=TERHUBUNG actual=TERHUBUNG
+UID-05 PASS  defnett-executor -> Remediator A :8091 | expected=TERHUBUNG actual=TERHUBUNG
+UID-06 PASS  defnett-executor -> Remediator B :8091 | expected=TERHUBUNG actual=TERHUBUNG
+UID-07 PASS  defnett-collector -> Approval Authority :8093 | expected=TERHUBUNG actual=TERHUBUNG
+UID-08 PASS  defnett-collector baca database Authority | expected=DITOLAK actual=DITOLAK
+UID-09 PASS  defnett-collector tulis direktori database Authority | expected=DITOLAK actual=DITOLAK
+UID-10 PASS  defnett-executor baca database Authority | expected=DITOLAK actual=DITOLAK
+UID-11 PASS  defnett-collector baca akun operator | expected=DITOLAK actual=DITOLAK
+UID-12 PASS  defnett-collector baca executor.env | expected=DITOLAK actual=DITOLAK
+UID-13 PASS  defnett-collector baca approval-authority.env | expected=DITOLAK actual=DITOLAK
+UID-14 PASS  defnett-collector baca kunci TLS Authority | expected=DITOLAK actual=DITOLAK
+UID-15 PASS  defnett-approval baca kunci TLS Collector | expected=DITOLAK actual=DITOLAK
+UID-16 PASS  defnett-approval baca akun operator | expected=BISA actual=BISA
+INFO  tabel di database bukti (dipakai Collector dan Executor): chain_state,agent_status,remediation_runs,events,patrol_snapshots,patrol_events,sqlite_sequence,patrol_fs_scans,patrol_fs_directories,event_dedup,event_relationships,operator_approvals,operator_audit
+INFO  aturan guard UID: 3 baris owner-match di OUTPUT
+UFW Status: active
+UFW 
+UFW To                         Action      From
+UFW --                         ------      ----
+UFW 22/tcp                     ALLOW       192.168.56.1               # SSH admin host
+UFW 8090/tcp                   ALLOW       192.168.56.1               # dashboard/API admin
+UFW 8090/tcp                   ALLOW       192.168.56.11              # telemetry server-a
+UFW 8090/tcp                   ALLOW       192.168.56.12              # telemetry server-b
+UFW 8443/tcp                   ALLOW       192.168.56.1               # dashboard/API HTTPS admin
+UFW 8443/tcp                   ALLOW       192.168.56.11              # HTTPS telemetry server-a
+UFW 8443/tcp                   ALLOW       192.168.56.12              # HTTPS telemetry server-b
+UFW 
+VW-01 PASS  Login viewer | expected=200 actual=200
+VW-02 PASS  Viewer membaca dashboard | expected=200 actual=200
+VW-03 PASS  Viewer menekan Serang | expected=401 actual=401
+VW-04 PASS  Viewer menyetujui approval | expected=401 actual=401
+LEG-01 PASS  Collector menulis baris APPROVED palsu ke tabel lama | expected=0 actual=0
+LEG-02 PASS  Executor tidak menyentuh baris palsu (log) | expected=0 actual=0
+LEG-03 FAIL  Status eksekusi baris palsu tetap NONE | expected=NONE actual=PASS
+INFO  baris uji uji-legacy-1793730934 dihapus lagi dari tabel lama
+== selesai: PASS=23 FAIL=1, hasil di /tmp/defnett-checks-collector.txt

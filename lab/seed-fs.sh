@@ -95,7 +95,7 @@ while [ "$j" -le 20 ]; do
 done
 printf "Sep 25 09:15:01 node %s auth: heartbeat agent sukses\n" "$HOST_ID" > "$DATA/var/log/auth.log"
 cat > "$DATA/var/lib/defnett/state.json" <<EOF
-{"host": "$HOST_ID", "mode": "ACTIVE_LAB", "baseline": "hash-chain"}
+{"host": "$HOST_ID", "mode": "OPERATIONAL", "baseline": "hash-chain"}
 EOF
 
 printf "seed %s selesai: %s file, %s direktori\n" \

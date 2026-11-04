@@ -1,0 +1,10 @@
+{
+  "policy_id": "modbus-lab-v1",
+  "device_id": "OT-SIM-01",
+  "unit_ids": [1],
+  "allowed_sources": ["127.0.0.1/32"],
+  "read_ranges": [[100, 199]],
+  "write_registers": [120],
+  "initial_registers": {"100": 42, "120": 0},
+  "asset_impact": 55
+}
