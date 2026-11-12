@@ -189,11 +189,15 @@ function roomRect(host) {
   return { x: host === "server-b" ? 462 : 28, y: 70, w: 410, h: h - 70 - 112 };
 }
 /* Satu pintu untuk tiap port terbuka yang dilaporkan agent. Pintu 80 menjadi pintu utama insiden. */
-const PORT_NAMES = { 21: "FTP", 22: "SSH", 25: "SMTP", 53: "DNS", 80: "HTTP", 443: "HTTPS", 3306: "MYSQL", 8080: "APP", 8091: "WORKER" };
+const PORT_NAMES = { 21: "FTP", 22: "SSH", 25: "SMTP", 53: "DNS", 80: "HTTP", 443: "HTTPS", 3306: "MYSQL", 8080: "APP", 8091: "REPAIR" };
+/* Port yang benar-benar terbuka ke jaringan lab di Server A dan B (ss -ltn + ufw, 12 Nov):
+ * 22 SSH, 80 WordPress via HAProxy, 8080 app/healthcheck, 8091 remediator. 53 dan 3306 hanya
+ * di loopback. Dipakai selama agent belum melaporkan port (mis. sebelum login operator). */
+const DEFAULT_PORTS = [22, 80, 8080, 8091];
 const MAX_DOORS = 6;
 function doorsOf(host) {
   const r = roomRect(host), open = patrol.ports[host] || [];
-  const ports = open.length ? open.slice(0, MAX_DOORS) : [80];
+  const ports = (open.length ? open : DEFAULT_PORTS).slice(0, MAX_DOORS);
   const gap = r.w / (ports.length + 1), half = Math.min(32, gap / 2 - 5);
   return ports.map((port, i) => ({ port, half, x: r.x + gap * (i + 1), y: r.y + r.h }));
 }
@@ -383,15 +387,20 @@ function thiefLeave(th) {
     .go(D.x, roadY(), 135, pose).go(side < 0 ? -50 : 950, roadY(), 150, pose)
     .call((a) => { a.dead = true; });
 }
+const LURK_MS = 45000;
 function thiefNext(th) {
   if (th.dead) return;
   const next = th.more.shift();
   if (next) { thiefWork(th, next.ev, next.action); return; }
-  if (incidentActive(th.host) || scene[th.host].shutTarget > 0.5) { trapThief(th); return; }
-  if (th.lurk && !th.carry) {
-    th.lurkUntil = th.lurkUntil || sim.t + 9000;
+  const caught = (host) => incidentActive(host) || scene[host].queue.length > 0 || scene[host].shutTarget > 0.5;
+  if (caught(th.host)) { trapThief(th); return; }
+  // Penyusup berbahaya tidak pulang sendiri: ia berkeliaran di dalam sampai playbook
+  // mendeteksi dan mengisolasi server. Deteksi asli datang beberapa detik setelah aksi
+  // (agent harus memindai dulu), jadi tunggu cukup lama sebelum menyerah.
+  if (th.lurk) {
+    th.lurkUntil = th.lurkUntil || sim.t + LURK_MS;
     th.loop = (a) => {
-      if (incidentActive(a.host)) { trapThief(a); return; }
+      if (caught(a.host)) { trapThief(a); return; }
       if (sim.t > a.lurkUntil) { a.loop = null; thiefLeave(a); return; }
       const fs = filesOf(a.host), f = fs[Math.floor(Math.random() * fs.length)];
       if (f) a.go(f.x + (Math.random() - 0.5) * 40, f.y + 30, 48, "sneak").wait(900, "peek");
@@ -434,7 +443,7 @@ function spawnThief(host, id, ev, action, opts = {}) {
   if (action === "denied" && same.length) return same[0];
   if (thiefList().length >= 8) return null;
   const th = new Actor("thief", host, clamp(D.x + side * 150, 20, 880), roadY(), {
-    id, uid: ++thiefSeq, more: [], lurk: Boolean(opts.lurk), tag: cleanText(opts.tag || id, 15), doorPort: D.port,
+    id, uid: ++thiefSeq, more: [], lurk: opts.lurk ?? (action !== "denied" && safeSeverity(ev?.severity) !== "safe"), tag: cleanText(opts.tag || id, 15), doorPort: D.port,
   });
   thieves.set(th.uid, th);
   th.go(D.x, roadY(), 115, "walk");
@@ -446,7 +455,6 @@ function spawnThief(host, id, ev, action, opts = {}) {
   }
   th.go(D.x, D.y + 12, 95, "sneak").go(D.x, D.y - 26, 80, "sneak").call((a) => {
     a.inside = true;
-    if (!opts.port) return;
     sc.doorAlert[D.port] = sim.t;
     popup(D.x, D.y - 44, `MASUK :${D.port}`, "#e0584a", 13);
     ring(D.x, D.y - 10, "#e0584a", 800, 40);
@@ -460,10 +468,11 @@ function ensureThief(sc) {
   let th = thiefList().find((t) => t.host === host && !t.leaving && !t.ko && t.inside)
     || thiefList().find((t) => t.host === host && !t.leaving && !t.ko);
   if (!th) {
-    th = new Actor("thief", host, D.x, D.y - 26, { id: "intruder", uid: ++thiefSeq, more: [], tag: "INTRUDER", inside: true });
+    th = new Actor("thief", host, D.x, D.y - 26, { id: "intruder", uid: ++thiefSeq, more: [], tag: "INTRUDER", inside: true, doorPort: D.port });
     thieves.set(th.uid, th); smoke(th.x, th.y - 10, 8);
   } else if (!th.inside) {
-    th.stop(); th.x = D.x; th.y = D.y - 26; th.inside = true; smoke(th.x, th.y - 10, 6);
+    const TD = doorFor(host, th.doorPort);
+    th.stop(); th.x = TD.x; th.y = TD.y - 26; th.inside = true; smoke(th.x, th.y - 10, 6);
   }
   th.incident = true; th.more = []; sc.thief = th;
   return th;
@@ -585,6 +594,7 @@ function resetIncident(sc) {
 }
 function endIncident(sc) {
   const host = sc.host;
+  sc.demoRun = false;
   sc.vis = null; sc.ended = true; sc.policeScript = false; sc.guardScript = false; sc.alarmStage = false; sc.maint = false; sc.thief = null;
   police[host].hold = null; police[host].stop(); guards[host].loop = null; guards[host].stop();
   clearFileStates(host);
@@ -613,11 +623,11 @@ function enterStage(sc, stage, opt = {}) {
     case "ISOLATING": {
       if (settle) snap(1, 1);
       else {
-        later(450, () => { sc.shutTarget = 1; popup(D.x, D.y - 66, "GERBANG DITUTUP", "#e68a2e", 11); }, sc);
+        later(450, () => { sc.shutTarget = 1; popup(D.x, D.y - 66, "SEMUA PORT DITUTUP", "#e68a2e", 11); }, sc);
         later(1500, () => { sc.cutTarget = 1; }, sc);
       }
-      const th = ensureThief(sc);
-      th.stop(); th.go(D.x, D.y - 30, 150, "run").call((a) => { a.say("Pintunya nutup!", 1900, "bad"); shake(200); }).wait(500, "panic");
+      const th = ensureThief(sc), TD = doorFor(host, th.doorPort);
+      th.stop(); th.go(TD.x, TD.y - 30, 150, "run").call((a) => { a.say("Pintunya nutup!", 1900, "bad"); shake(200); sc.doorAlert[TD.port] = sim.t; }).wait(500, "panic");
       trapThief(th);
       pol.stop(); pol.hold = "aim"; pol.go(stand.x, stand.y, 115, "run");
       break;
@@ -646,7 +656,8 @@ function enterStage(sc, stage, opt = {}) {
         .call(() => { sc.shutTarget = 0; popup(D.x, D.y + 40, "AKSES DIBERIKAN", "#7be3b0", 10); });
       later(3200, () => {
         if (th.ko || th.dead) return;
-        th.stop(); th.trapped = false; th.say("KABUR!", 1500, "bad"); th.go(D.x, D.y - 24, 150, "run");
+        const TD = doorFor(host, th.doorPort);
+        th.stop(); th.trapped = false; th.say("KABUR!", 1500, "bad"); th.go(TD.x, TD.y - 24, 150, "run");
       }, sc);
       later(3900, () => fireShot(pol, th, false), sc);
       later(4600, () => fireShot(pol, th, true), sc);
@@ -662,6 +673,7 @@ function enterStage(sc, stage, opt = {}) {
     case "VERIFYING": {
       sc.guardScript = true;
       if (settle) { snap(1, 1); settleKo(sc); pol.hold = null; }
+      sc.shutTarget = 1; sc.cutTarget = 1; // tetap terisolasi sampai health check HAProxy
       gd.loop = null; gd.stop(); gd.hold = null; gd.say("Verifikasi file…", 1800);
       for (const f of affectedFiles(host)) {
         gd.go(f.x + 26, f.y + 22, 85).wait(1000, "clip").call(() => {
@@ -711,6 +723,7 @@ function advanceScene(sc) {
     endIncident(sc);
   }
 }
+const STALE_RUN_MS = 15 * 60 * 1000;
 function applyRemediation(run, meta = {}) {
   if (!run || !hosts.includes(run.host_id)) return;
   const sc = scene[run.host_id];
@@ -718,18 +731,30 @@ function applyRemediation(run, meta = {}) {
   const stages = steps.map((s) => stageAlias(s.stage)).filter(Boolean);
   if (!stages.length && run.status) stages.push(stageAlias(run.status));
   const firstTs = Date.parse(steps[0]?.timestamp || run.started_at || "") || Date.now();
+  if (!meta.demo && sc.demoRun && incidentActive(run.host_id)) return;
+  // Run yang tidak selesai dan tidak bergerak lebih lama dari masa berlaku approval (15 menit)
+  // sudah mati: jangan tampilkan sebagai insiden dan jangan kunci tombol SERANG.
+  if (!meta.demo && !run.completed_at) {
+    const lastTs = Math.max(firstTs, ...steps.map((st) => Date.parse(st.timestamp || "") || 0), Date.parse(run.updated_at || "") || 0);
+    if (Date.now() - lastTs > STALE_RUN_MS) {
+      sc.ignored = run.event_id;
+      if (sc.runId === run.event_id) { endIncident(sc); sc.runId = null; }
+      return;
+    }
+  }
   if (sc.runId !== run.event_id) {
     if (sc.ignored === run.event_id) return;
     const doneTs = run.completed_at ? Date.parse(run.completed_at) : 0;
-    if (doneTs && Date.now() - doneTs > 25000) { sc.ignored = run.event_id; return; }
+    if (!meta.demo && doneTs && Date.now() - doneTs > 25000) { sc.ignored = run.event_id; return; }
     resetIncident(sc);
-    sc.runId = run.event_id; sc.attackPending = false;
-    sc.joinedLate = Date.now() - firstTs > 9000;
+    sc.runId = run.event_id; sc.attackPending = false; sc.demoRun = Boolean(meta.demo);
+    sc.joinedLate = !meta.demo && Date.now() - firstTs > 9000;
   }
   sc.run = run;
   const analysis = patrol.analysis || {};
   const delayHost = analysis.demo_repair_host;
-  sc.delayMs = delayHost === "all" || run.host_id === delayHost ? Number(analysis.demo_repair_delay_seconds || 0) * 1000 : 0;
+  sc.delayMs = meta.demo ? DEMO_REPAIR_MS
+    : delayHost === "all" || run.host_id === delayHost ? Number(analysis.demo_repair_delay_seconds || 0) * 1000 : 0;
   for (const step of steps) {
     const alias = stageAlias(step.stage);
     if (alias && step.timestamp) sc.stageTs[alias] = Date.parse(step.timestamp);
@@ -755,8 +780,10 @@ function stageAlias(stage) {
 }
 /* Status server diambil dari HAProxy asli lewat collector; tidak ada status simulasi. */
 const LB_TEXT = { UP: ["UP", "#6ee3b0"], MAINT: ["DOWN", "#ff6b5c"], DRAIN: ["DOWN", "#ff6b5c"], DOWN: ["DOWN", "#ff6b5c"], NOLB: ["CEK", "#e6b23a"] };
+const DEMO_MAINT = ["ISOLATING", "ISOLATED", "REPAIRING", "VERIFYING", "FAILED"];
 function lbStatus(host) {
-  const status = scene[host].backend;
+  const sc = scene[host];
+  const status = sc.demoRun && incidentActive(host) && DEMO_MAINT.includes(sc.vis) ? "MAINT" : sc.backend;
   const known = Object.keys(LB_TEXT).find((key) => status.startsWith(key));
   return LB_TEXT[known] || ["?", "#b8c4cc"];
 }
@@ -782,7 +809,7 @@ function applyBackend(host, status) {
 function repairProgress(sc) {
   if (sc.vis !== "REPAIRING") return null;
   if (sc.delayMs <= 0) return { pct: null, label: "memperbaiki…" };
-  const elapsed = !sc.stageTs.REPAIRING ? sim.t - sc.repairStart : Date.now() - sc.stageTs.REPAIRING;
+  const elapsed = sc.demoRun || !sc.stageTs.REPAIRING ? sim.t - sc.repairStart : Date.now() - sc.stageTs.REPAIRING;
   const pct = clamp(elapsed / sc.delayMs, 0, 1), remain = Math.max(0, Math.ceil((sc.delayMs - elapsed) / 1000));
   const mm = String(Math.floor(remain / 60)).padStart(2, "0"), ss = String(remain % 60).padStart(2, "0");
   return { pct, label: `${Math.round(pct * 100)}% · sisa ${mm}:${ss}` };
@@ -805,11 +832,11 @@ function ingestLive(event) {
       else inside.more.push({ ev: event, action });
       return;
     }
-    spawnThief(host, "fim", event, action, { tag: "INTRUDER" });
+    spawnThief(host, "fim", event, action, { tag: "INTRUDER", port: event.port });
     return;
   }
   if (incidentActive(host)) return;
-  spawnThief(host, event.actor, event, event.status === "blocked" ? "denied" : event.action, { port: event.port, lurk: event.action === "login" });
+  spawnThief(host, event.actor, event, event.status === "blocked" ? "denied" : event.action, { port: event.port, lurk: event.action === "login" ? true : undefined });
 }
 function makeDemoEvent(actor, host, action, severity, path, offset) {
   return {
@@ -821,17 +848,69 @@ function makeDemoEvent(actor, host, action, severity, path, offset) {
     status: action === "denied" ? "blocked" : "demo", source: "demo",
   };
 }
+/* Demo lokal (tanpa collector): penyusup datang lewat port yang terbuka. Begitu ada yang
+ * berhasil masuk, server itu menjalankan playbook simulasi: terdeteksi → semua port ditutup
+ * dan kabel HAProxy diputus (isolasi) → perbaikan → verifikasi → masuk lagi ke LB.
+ * Server lain tetap melayani dan penyusup yang datang ke sana ditolak di pintunya. */
+const DEMO_REPAIR_MS = 9000;
+const DEMO_ACTORS = ["198.51.100.23", "203.0.113.42", "192.0.2.77", "198.51.100.91"];
+function openPorts(host) { return doorsOf(host).map((d) => d.port); }
+function demoBusy(host) { const sc = scene[host]; return incidentActive(host) || sc.queue.length > 0 || sc.demoPending; }
 function addDemoPair() {
   const pick = (host) => { const fs = filesOf(host); return fs.length ? fs[Math.floor(Math.random() * fs.length)].path : "index.txt"; };
   const cycle = patrol.demoCycle++;
-  const actions = [["read", "modify"], ["download", "read"], ["denied", "delete"], ["read", "download"]][cycle % 4];
   const list = [];
-  if (!incidentActive("server-a")) list.push(makeDemoEvent("198.51.100.23", "server-a", actions[0], "suspicious", pick("server-a"), 0));
-  if (!incidentActive("server-b")) list.push(makeDemoEvent("203.0.113.42", "server-b", actions[1], actions[1] === "denied" ? "suspicious" : "compromised", pick("server-b"), 1));
+  const anyBusy = hosts.some(demoBusy);
+  const target = hosts[cycle % 2];
+  for (const host of hosts) {
+    if (demoBusy(host)) continue;
+    const ports = openPorts(host);
+    const port = ports[(cycle + (host === "server-b" ? 1 : 0)) % ports.length];
+    const actor = DEMO_ACTORS[(cycle * 2 + hosts.indexOf(host)) % DEMO_ACTORS.length];
+    if (host === target && !anyBusy) {
+      // penyusup berhasil masuk → memicu isolasi
+      const action = ["modify", "download", "delete", "modify"][Math.floor(cycle / 2) % 4];
+      const ev = makeDemoEvent(actor, host, action, "compromised", pick(host), 0);
+      ev.port = port; ev.status = "demo";
+      list.push(ev);
+    } else {
+      // percobaan yang ditolak firewall di port lain
+      const ev = makeDemoEvent(actor, host, "denied", "suspicious", pick(host), 1);
+      ev.port = port;
+      list.push(ev);
+    }
+  }
   patrol.demoEvents.unshift(...list);
   patrol.demoEvents = patrol.demoEvents.slice(0, 30);
-  list.forEach(ingestLive);
+  for (const ev of list) {
+    if (patrol.seen.has(ev.id)) continue;
+    patrol.seen.add(ev.id);
+    const th = spawnThief(ev.host_id, ev.actor, ev, ev.action, { port: ev.port, tag: ev.actor });
+    if (th && ev.action !== "denied") {
+      scene[ev.host_id].demoPending = true;
+      later(4200, () => startDemoIsolation(ev.host_id, th, ev));
+    }
+  }
   refreshPatrol();
+}
+function startDemoIsolation(host, th, ev) {
+  const sc = scene[host];
+  // tunggu sampai penyusup benar-benar melewati pintu port, baru server diisolasi
+  if (patrol.demo && th && !th.dead && !th.leaving && !th.inside && (th.waitTries = (th.waitTries || 0) + 1) < 20) {
+    later(400, () => startDemoIsolation(host, th, ev));
+    return;
+  }
+  sc.demoPending = false;
+  if (!patrol.demo || incidentActive(host) || sc.queue.length) return;
+  const stamp = Date.now(), iso = () => new Date().toISOString();
+  const run = { event_id: `demo-run-${stamp}`, host_id: host, path: ev?.path, status: "DETECTED", steps: [], source: "demo" };
+  const push = (stage) => {
+    if (sc.runId !== run.event_id && stage !== "DETECTED") return;
+    run.status = stage; run.steps.push({ stage, timestamp: iso() }); applyRemediation(run, { demo: true });
+  };
+  push("DETECTED");
+  [["ISOLATING", 400], ["ISOLATED", 800], ["REPAIRING", 1200], ["VERIFYING", 1200 + DEMO_REPAIR_MS], ["REJOINING", 1600 + DEMO_REPAIR_MS], ["REPAIRED", 2000 + DEMO_REPAIR_MS]]
+    .forEach(([stage, offset]) => later(offset, () => push(stage)));
 }
 /* SERANG: minta collector mengubah kunci demo di server target. Agent mendeteksinya,
  * lalu playbook sungguhan mengeluarkan server dari HAProxy, memulihkan file, dan memasukkannya lagi. */
@@ -1561,7 +1640,7 @@ function updateIncidentUI() {
   if (!sc) { node.hidden = true; return; }
   node.hidden = false;
   node.style.setProperty("--incident-color", STAGE_TEXT[sc.vis]?.[1] || "#e0584a");
-  $("#incident-title").textContent = `${HOST_LABEL[sc.host]} · ${STAGE_TEXT[sc.vis]?.[0] || sc.vis}`;
+  $("#incident-title").textContent = `${HOST_LABEL[sc.host]} · ${STAGE_TEXT[sc.vis]?.[0] || sc.vis}${sc.demoRun ? " · SIMULASI" : ""}`;
   $("#incident-lb").textContent = `LB  ${hosts.map((host) => `${host.at(-1).toUpperCase()} ${lbStatus(host)[0]}`).join("  ·  ")}`;
   const idx = STAGES.indexOf(sc.vis), prog = repairProgress(sc);
   const metrics = sc.run?.metrics || {};
@@ -1590,32 +1669,20 @@ canvas.addEventListener("click", (event) => {
   const file = patrol.layout.map((f) => ({ f, d: Math.hypot(f.x - x, f.y - y) })).filter((o) => o.d < 30).sort((p, q) => p.d - q.d)[0]?.f;
   if (file) showDetail({ ts: file.checked_at, actor: "police", action: "read", host_id: file.host_id, path: file.path, hash_new: file.sha256, severity: severityForFile(file) });
 });
+const VIEWS = { overview: "overview-view", patrol: "patrol-view", terminal: "terminal-view" };
 function selectTab(name) {
-  const isPatrol = name === "patrol";
-  const patrolView = $("#patrol-view");
-  const overviewView = $("#overview-view");
-
-  if (isPatrol) {
-    overviewView.style.opacity = "0";
-    setTimeout(() => {
-      overviewView.hidden = true;
-      patrolView.hidden = false;
-      patrolView.style.opacity = "0";
-      setTimeout(() => { patrolView.style.opacity = "1"; }, 20);
-    }, 150);
-  } else {
-    patrolView.style.opacity = "0";
-    setTimeout(() => {
-      patrolView.hidden = true;
-      overviewView.hidden = false;
-      overviewView.style.opacity = "0";
-      setTimeout(() => { overviewView.style.opacity = "1"; }, 20);
-    }, 150);
-  }
-
-  $("#tab-patrol").setAttribute("aria-selected", String(isPatrol));
-  $("#tab-overview").setAttribute("aria-selected", String(!isPatrol));
-  if (isPatrol) layoutFiles();
+  if (!VIEWS[name]) name = "overview";
+  const next = $(`#${VIEWS[name]}`);
+  const current = Object.values(VIEWS).map((id) => $(`#${id}`)).find((node) => node && !node.hidden && node !== next);
+  const show = () => {
+    for (const id of Object.values(VIEWS)) { const node = $(`#${id}`); if (node && node !== next) node.hidden = true; }
+    next.hidden = false; next.style.opacity = "0";
+    setTimeout(() => { next.style.opacity = "1"; }, 20);
+    if (name === "patrol") layoutFiles();
+    window.dispatchEvent(new CustomEvent("defnett:tab", { detail: name }));
+  };
+  if (current) { current.style.opacity = "0"; setTimeout(show, 150); } else show();
+  for (const key of Object.keys(VIEWS)) $(`#tab-${key}`)?.setAttribute("aria-selected", String(key === name));
 }
 function scheduleDemo(chain) {
   later(4200, () => { if (patrol.demo && patrol.demoChain === chain) { addDemoPair(); scheduleDemo(chain); } });
@@ -1629,8 +1696,7 @@ function toggleDemo() {
   if (patrol.demo) { addDemoPair(); scheduleDemo(patrol.demoChain); }
   else { patrol.demoEvents = []; refreshPatrol(); }
 }
-$("#tab-patrol").addEventListener("click", () => selectTab("patrol"));
-$("#tab-overview").addEventListener("click", () => selectTab("overview"));
+for (const key of Object.keys(VIEWS)) $(`#tab-${key}`)?.addEventListener("click", () => selectTab(key));
 $("#patrol-demo-toggle").addEventListener("click", toggleDemo);
 $("#patrol-incident-demo")?.addEventListener("click", () => {
   patrol.incidentHost = $("#patrol-incident-host")?.value === "server-b" ? "server-b" : "server-a";
@@ -1651,7 +1717,7 @@ $("#patrol-pause").addEventListener("click", (event) => {
 $("#patrol-speed").addEventListener("change", (event) => { patrol.speed = Number(event.target.value) || 1; });
 $("#patrol-filter").addEventListener("change", (event) => { patrol.filter = event.target.value; renderPatrolEvents(); });
 $(".dashboard-tabs").addEventListener("keydown", (event) => {
-  const tabs = [$("#tab-overview"), $("#tab-patrol")], current = tabs.indexOf(document.activeElement);
+  const tabs = Object.keys(VIEWS).map((key) => $(`#tab-${key}`)).filter(Boolean), current = tabs.indexOf(document.activeElement);
   if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
     event.preventDefault();
     const next = tabs[(current + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];

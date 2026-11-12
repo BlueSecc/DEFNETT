@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/patrol.css">
     <script src="/dashboard.js" defer></script>
     <script src="/patrol.js" defer></script>
+    <script src="/terminal.js" defer></script>
   </head>
   <body class="dark-theme">
     <header class="topbar">
@@ -20,6 +21,7 @@
         <nav class="dashboard-tabs" role="tablist" aria-label="Tampilan dashboard">
           <button id="tab-overview" type="button" role="tab" aria-selected="true" aria-controls="overview-view">Overview</button>
           <button id="tab-patrol" type="button" role="tab" aria-selected="false" aria-controls="patrol-view">Patrol</button>
+          <button id="tab-terminal" type="button" role="tab" aria-selected="false" aria-controls="terminal-view">Terminal</button>
         </nav>
         <span id="connection" class="connection" role="status"><span class="status-dot"></span>Menghubungkan…</span>
         <button id="operator-button" class="refresh-button" type="button">Masuk operator</button>
@@ -71,14 +73,14 @@
           <section id="overview-view" class="tab-panel visual-panel" role="tabpanel" aria-labelledby="tab-overview">
             <div class="topology-container">
               <svg class="topology" viewBox="0 0 1000 360" role="img">
-                <path class="route telemetry-route route-electric" d="M174 112 C240 112 250 173 324 173 S420 173 473 173" />
-                <path class="route telemetry-route route-electric" d="M174 272 C240 272 250 211 324 211 S420 211 473 211" />
-                <path class="route control-route route-electric" d="M564 174 C625 174 625 112 688 112" />
+                <path id="route-agent-a" class="route telemetry-route route-electric" d="M174 112 C240 112 250 173 324 173 S420 173 473 173" />
+                <path id="route-agent-b" class="route telemetry-route route-electric" d="M174 272 C240 272 250 211 324 211 S420 211 473 211" />
+                <path id="route-proxy" class="route control-route route-electric" d="M564 174 C625 174 625 112 688 112" />
                 <path id="route-server-a" class="route service-route route-electric" d="M780 112 C850 112 846 176 888 176" />
                 <path id="route-server-b" class="route service-route route-electric" d="M780 112 C852 112 844 278 888 278" />
-                <circle class="route-node" cx="274" cy="143" r="4" />
-                <circle class="route-node" cx="274" cy="241" r="4" />
-                <circle class="route-node control-node" cx="627" cy="142" r="4" />
+                <circle id="dot-agent-a" class="route-node" cx="274" cy="143" r="4" />
+                <circle id="dot-agent-b" class="route-node" cx="274" cy="241" r="4" />
+                <circle id="dot-proxy" class="route-node control-node" cx="627" cy="142" r="4" />
                 <g class="map-node" id="node-agent-a" transform="translate(38 79)">
                   <rect class="node-shell" width="136" height="66" rx="8" />
                   <circle class="node-status" cx="17" cy="19" r="5" />
@@ -93,11 +95,12 @@
                   <text class="node-title" x="16" y="46">Server B</text>
                   <text class="node-detail" id="agent-b-state" x="16" y="59">-</text>
                 </g>
-                <g class="map-node collector-node" transform="translate(473 151)">
+                <g class="map-node collector-node" id="node-collector" transform="translate(473 151)">
                   <rect class="node-shell" width="112" height="82" rx="10" />
                   <circle class="node-status" cx="17" cy="20" r="5" />
                   <text class="node-kicker" x="31" y="23">COLLECTOR</text>
                   <text class="node-title" x="14" y="52">FIM</text>
+                  <text class="node-detail" id="collector-state" x="14" y="68">-</text>
                 </g>
                 <g class="map-node" id="node-proxy" transform="translate(688 79)">
                   <rect class="node-shell" width="132" height="66" rx="8" />
@@ -149,6 +152,20 @@
                 <span id="attack-status" class="attack-status" role="status"></span>
               </div>
             </div>
+          </section>
+
+          <section id="terminal-view" class="tab-panel visual-panel terminal-panel" role="tabpanel" aria-labelledby="tab-terminal" hidden>
+            <form id="term-form" class="term-toolbar" autocomplete="off">
+              <div class="term-hosts" role="group" aria-label="Server tujuan">
+                <button type="button" data-host="server-a" aria-pressed="true">Server A</button>
+                <button type="button" data-host="server-b" aria-pressed="false">Server B</button>
+              </div>
+              <label class="term-field"><span>Username</span><input id="term-user" name="username" autocomplete="username" spellcheck="false" placeholder="username server" required></label>
+              <button id="term-connect" class="btn btn-primary" type="submit">Hubungkan</button>
+              <button id="term-disconnect" class="btn" type="button" hidden>Putuskan</button>
+              <span id="term-status" class="term-status" role="status">Masuk operator dulu, lalu isi username server. Password diketik di terminal.</span>
+            </form>
+            <div class="term-frame"><div id="term-screen" class="term-screen" aria-label="Terminal SSH"></div></div>
           </section>
         </div>
 

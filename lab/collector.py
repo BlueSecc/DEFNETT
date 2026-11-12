@@ -31,6 +31,7 @@ import policy_gate
 import risk_engine
 import trajectory
 import tls_support
+import web_terminal
 
 DB_PATH = db.DB_PATH
 DASHBOARD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard")
@@ -68,6 +69,7 @@ ASSET_ROUTES = {
     "/dashboard.js": ("dashboard.js", "text/javascript; charset=utf-8"),
     "/patrol.css": ("patrol.css", "text/css; charset=utf-8"),
     "/patrol.js": ("patrol.js", "text/javascript; charset=utf-8"),
+    "/terminal.js": ("terminal.js", "text/javascript; charset=utf-8"),
 }
 SESSION_REQUIRED_GET = {
     "/v1/dashboard", "/v1/approvals", "/api/patrol/state", "/v1/fsmap", "/v1/evidence/verify",
@@ -1038,6 +1040,8 @@ class Handler(BaseHTTPRequestHandler):
         if target.path == "/v1/operator/whoami":
             return self.operator_whoami()
         session = session_from_headers(self.headers)
+        if target.path.startswith("/v1/term/"):
+            return self.terminal_read(session, target)
         if target.path not in SESSION_REQUIRED_GET:
             return self.respond(404, {"error": "not_found"})
         if not authority_authorized(session, "viewer"):
@@ -1260,6 +1264,69 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(202, {"approval": approvals.get(approval_id), "submitted": True})
         except approvals.ApprovalError as error:
             return self.respond(409, {"error": str(error)})
+
+    # ── terminal web (shell SSH ke server lab; login tetap pakai username+password server) ──
+    @staticmethod
+    def terminal_owner(session):
+        return f"{session.get('username', '')}:{session.get('session_id') or session.get('csrf', '')}"
+
+    def terminal_read(self, session, target):
+        if not authority_authorized(session, "operator"):
+            return self.respond(401, {"error": "unauthorized"})
+        session_id = target.path.rsplit("/", 1)[-1]
+        query = parse_qs(target.query)
+        try:
+            result = web_terminal.read(
+                session_id, self.terminal_owner(session),
+                query.get("offset", ["0"])[0], query.get("wait", ["10"])[0],
+            )
+        except web_terminal.TerminalError as error:
+            return self.respond(404, {"error": str(error)})
+        return self.respond(200, result)
+
+    def terminal_post(self):
+        session = session_from_headers(self.headers)
+        if not authority_authorized(session, "operator"):
+            return self.respond(401, {"error": "unauthorized"})
+        if not self.csrf_or_401(session):
+            return
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            if length < 0 or length > 32768:
+                return self.respond(413, {"error": "invalid_body_size"})
+            payload = json.loads(self.rfile.read(length) or b"{}") if length else {}
+            if not isinstance(payload, dict):
+                raise ValueError("invalid_body")
+        except (ValueError, UnicodeDecodeError):
+            return self.respond(400, {"error": "invalid_body"})
+        owner = self.terminal_owner(session)
+        parts = urlsplit(self.path).path.strip("/").split("/")  # v1/term[/<id>/<aksi>]
+        try:
+            if len(parts) == 2:
+                term = web_terminal.open_session(
+                    owner, payload.get("host"), payload.get("username"),
+                    payload.get("rows", 24), payload.get("cols", 80),
+                )
+                print(f"terminal dibuka oleh operator:{session.get('username')} ke {term.host} "
+                      f"sebagai {term.username}", flush=True)
+                return self.respond(201, {"id": term.id, "host": term.host, "username": term.username})
+            if len(parts) != 4:
+                return self.respond(404, {"error": "not_found"})
+            session_id, action = parts[2], parts[3]
+            if action == "input":
+                web_terminal.write(session_id, owner, payload.get("data"))
+            elif action == "resize":
+                web_terminal.resize_session(session_id, owner, payload.get("rows"), payload.get("cols"))
+            elif action == "close":
+                web_terminal.close(session_id, owner)
+            else:
+                return self.respond(404, {"error": "not_found"})
+            return self.respond(200, {"ok": True})
+        except web_terminal.TerminalError as error:
+            code = {"terminal_not_found": 404, "terminal_disabled": 403}.get(str(error), 409)
+            return self.respond(code, {"error": str(error)})
+        except OSError as error:
+            return self.respond(500, {"error": f"terminal_io:{type(error).__name__}"})
 
     def request_lab_attack(self):
         session = session_from_headers(self.headers)
@@ -1531,6 +1598,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.handle_approval_action(action)
         if self.path.startswith("/v1/lab/attack/"):
             return self.request_lab_attack()
+        if self.path == "/v1/term" or self.path.startswith("/v1/term/"):
+            return self.terminal_post()
         if self.path.startswith("/v1/lab/recover/"):
             return self.request_backend_rejoin()
         if self.path != "/v1/events":
