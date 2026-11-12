@@ -14,7 +14,7 @@ COPY ot-policy.json /opt/defnett/ot-policy.json
 RUN groupadd --gid 10001 defnett \
     && useradd --uid 10001 --gid defnett --create-home --no-log-init defnett \
     && chmod 0644 /opt/defnett/*.py /opt/defnett/dashboard/* \
-    && install -d -o 10001 -g 10001 -m 0700 /data /state /evidence /target /quarantine /master /manifest /ops
+    && install -d -o 10001 -g 10001 -m 0700 /data /state /evidence /target /quarantine /master /manifest /ops /approval
 
 USER 10001:10001
 EXPOSE 8080 8090 8091 8092

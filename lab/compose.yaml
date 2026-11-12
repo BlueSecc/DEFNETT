@@ -171,11 +171,14 @@ services:
       - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/executor.crt:/tls/executor.crt:ro
       - ${DEFNETT_TLS_DIR:-${HOME}/.config/defnett-lab/tls}/executor.key:/tls/executor.key:ro
     networks:
-      - response_control
-      - repair_a
-      - repair_b
-      - execution_request
-      - authority_api
+      # IP tetap: tanpa ini executor bisa mengambil .2 lebih dulu dan HAProxy
+      # gagal start ("Address already in use") tergantung urutan start.
+      response_control:
+        ipv4_address: 172.31.254.3
+      repair_a: {}
+      repair_b: {}
+      execution_request: {}
+      authority_api: {}
     depends_on:
       approval-authority:
         condition: service_healthy
