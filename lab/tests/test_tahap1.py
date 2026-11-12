@@ -995,6 +995,66 @@ class CollectorHTTPTests(TahapBase):
         self.assertTrue(approval["created_by"].startswith("operator:"))
         self.assertEqual(approval["approval_status"], approvals.STATUS_APPROVED)
 
+    def test_terminal_web_wajib_operator_csrf_dan_pemilik(self):
+        import base64
+        import web_terminal
+        fake = Path(tempfile.mkdtemp()) / "fake-ssh"
+        fake.write_text("#!/bin/sh\nprintf 'fake-password: '\nread x\necho \"halo $x\"\n", encoding="utf-8")
+        fake.chmod(0o755)
+        original = web_terminal.SSH_BINARY
+        web_terminal.SSH_BINARY = str(fake)
+        self.addCleanup(setattr, web_terminal, "SSH_BINARY", original)
+        self.addCleanup(shutil.rmtree, fake.parent, True)
+
+        open_body = {"host": "server-a", "username": "malas"}
+        self.assertEqual(self.request("POST", "/v1/term", open_body)[0], 401)
+        self.assertEqual(self.request("GET", "/v1/term/apa-saja?offset=0&wait=0")[0], 401)
+        self.login("baca", "pembaca-tetap-ygz-1")
+        self.assertEqual(self.request("POST", "/v1/term", open_body)[0], 401)
+
+        _, login = self.login("admin", "kunci-rahasia-pengaman-9")
+        self.assertEqual(self.request("POST", "/v1/term", open_body)[0], 403)  # tanpa CSRF
+        csrf = login["csrf"]
+        self.assertEqual(self.request("POST", "/v1/term", {"host": "server-c", "username": "malas"}, csrf=csrf)[1]["error"], "unknown_host")
+        self.assertEqual(self.request("POST", "/v1/term", {"host": "server-a", "username": "root;id"}, csrf=csrf)[1]["error"], "invalid_username")
+        status, opened = self.request("POST", "/v1/term", open_body, csrf=csrf)
+        self.assertEqual(status, 201)
+        term_id = opened["id"]
+
+        def read_until(marker, offset=0):
+            output = b""
+            for _ in range(20):
+                status, body = self.request("GET", f"/v1/term/{term_id}?offset={offset}&wait=1")
+                self.assertEqual(status, 200)
+                output += base64.b64decode(body["data"])
+                offset = body["offset"]
+                if marker in output or body["closed"]:
+                    return output, offset, body["closed"]
+            return output, offset, False
+
+        output, offset, _ = read_until(b"fake-password:")
+        self.assertIn(b"fake-password:", output)
+        data = base64.b64encode(b"rahasia\n").decode()
+        self.assertEqual(self.request("POST", f"/v1/term/{term_id}/input", {"data": data}, csrf=csrf)[0], 200)
+        output, offset, _ = read_until(b"halo rahasia", offset)
+        self.assertIn(b"halo rahasia", output)
+
+        # operator lain tidak bisa membaca atau menutup sesi ini
+        provision_operators.add_operator(operator_auth.AUTH_FILE, "lain", "operator", "operator-lain-pass-77")
+        other = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        login_req = urllib.request.Request(self.base + "/v1/operator/login", data=json.dumps(
+            {"username": "lain", "password": "operator-lain-pass-77"}).encode(), headers={"Content-Type": "application/json"}, method="POST")
+        with other.open(login_req, timeout=5) as response:
+            self.assertEqual(response.status, 200)
+        try:
+            other.open(urllib.request.Request(self.base + f"/v1/term/{term_id}?offset=0&wait=0"), timeout=5)
+            self.fail("operator lain bisa membaca terminal")
+        except urllib.error.HTTPError as error:
+            self.assertEqual(error.code, 404)
+            error.close()
+
+        self.assertEqual(self.request("POST", f"/v1/term/{term_id}/close", {}, csrf=csrf)[0], 200)
+
     def test_technical_401_untuk_tanpa_sesi_serangan(self):
         status, body = self.request("POST", "/v1/lab/attack/server-a?vector=web")
         self.assertEqual(status, 401)

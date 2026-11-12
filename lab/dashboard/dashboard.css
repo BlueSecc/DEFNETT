@@ -457,10 +457,13 @@ button:hover, .btn:hover {
   stroke-dasharray: 10 10;
   animation: electric-flow 0.9s linear infinite;
 }
-.route-electric.telemetry-route { stroke: #3498db; }
-.route-electric.control-route { stroke: var(--accent-amber); }
+/* Semua kabel hijau saat tersambung, merah putus-putus saat mati */
+.route-electric.telemetry-route,
+.route-electric.control-route,
 .route-electric.service-route { stroke: var(--accent-teal); }
-.route-electric.service-route.route-down { stroke: var(--accent-red); stroke-dasharray: 2 10; opacity: 0.7; animation: none; }
+.route-electric.route-down { stroke: var(--accent-red); stroke-dasharray: 2 10; opacity: 0.7; animation: none; }
+.route-node, .control-node { fill: var(--accent-teal); }
+.route-node.route-down { fill: var(--accent-red); }
 
 @keyframes electric-pulse {
   0% { stroke-dashoffset: 0; }
@@ -558,3 +561,19 @@ button:hover, .btn:hover {
 .op-actions { display: flex; gap: 8px; }
 .op-actions .btn-primary { border-color: rgba(63,191,134,.55); color: #6ee3b0; }
 .op-error { color: var(--accent-red); font-size: 12px; min-height: 16px; }
+
+/* Terminal SSH (tab Terminal) */
+.terminal-panel { gap: 8px; }
+.term-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 10px; background: rgba(11, 15, 18, 0.85); border: 1px solid var(--border-color); border-radius: 8px; }
+.term-hosts { display: flex; gap: 2px; padding: 2px; background: #1b2631; border: 1px solid #34495e; border-radius: 4px; }
+.term-hosts button { min-height: 30px; padding: 4px 12px; color: var(--text-muted); background: transparent; border: 0; border-radius: 3px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.term-hosts button[aria-pressed="true"] { color: #000; background: var(--accent-teal); }
+.term-hosts button:disabled { cursor: not-allowed; opacity: 0.6; }
+.term-field { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); font-weight: 700; }
+.term-field input { width: 160px; padding: 7px 10px; background: #1b2631; border: 1px solid #34495e; border-radius: 4px; color: #fff; font-family: var(--font-mono); font-size: 12px; }
+.term-field input:disabled { opacity: 0.6; }
+.term-status { flex: 1 1 220px; min-width: 0; font-size: 12px; color: var(--text-muted); }
+.term-status[data-tone="bad"] { color: #ff8a7a; }
+.term-status[data-tone="good"] { color: var(--accent-teal); }
+.term-frame { flex: 1; min-height: 320px; position: relative; padding: 8px; background: #0b0f12; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+.term-screen { position: absolute; inset: 8px; }

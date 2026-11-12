@@ -40,7 +40,7 @@ const approvalLabels = {
 function setNodeState(id, state, detail) {
   const node = document.getElementById(id);
   if (node) {
-    node.setAttribute("class", `map-node ${state}`);
+    node.setAttribute("class", `map-node ${node.dataset.base || ""} ${state}`.replace(/\s+/g, " "));
     const text = node.querySelector(".node-detail");
     if (text) {
       if (text.textContent !== detail) {
@@ -53,7 +53,8 @@ function setNodeState(id, state, detail) {
     }
   }
   const mobileId = id.replace("node-agent-", "mobile-agent-").replace("node-server-", "mobile-server-");
-  const mobileNode = document.getElementById(mobileId);
+  // collector dan proxy tidak punya versi mobile; jangan timpa node desktop dengan kelas mobile.
+  const mobileNode = mobileId !== id ? document.getElementById(mobileId) : null;
   if (mobileNode) {
     mobileNode.setAttribute("class", `mobile-node ${state}`);
     const mobileText = mobileNode.querySelector("strong");
@@ -96,8 +97,10 @@ function renderBackends(data) {
   });
   const up = states.filter((state) => state === "up").length;
   const known = Object.values(data.backends || {}).some((state) => state !== "UNKNOWN");
-  const proxyState = !known || up === 0 ? "down" : up === states.length ? "up" : "maint";
-  setNodeState("node-proxy", proxyState === "up" ? "online" : proxyState, known ? `${up}/${states.length} UP` : "Offline");
+  // LB hijau selama masih melayani (minimal satu backend UP), merah kalau tidak ada yang UP atau statusnya tidak diketahui.
+  const proxyState = known && up > 0 ? "up" : "down";
+  setNodeState("node-proxy", proxyState === "up" ? "online" : "down", known ? `${up}/${states.length} UP` : "Offline");
+  setRoute("proxy", proxyState === "up");
   $("#chip-proxy").textContent = known ? `${up}/${states.length}` : "OFF";
   $("#chip-proxy").className = `mode-label status-${proxyState}`;
 }
@@ -184,8 +187,17 @@ function isOperator() {
   return operator.role === "operator";
 }
 
+const EXECUTION_HINTS = [
+  ["key_not_pristine", "Kunci server masih rusak dari serangan lama; pulihkan dulu (lab/vm/fix-server-a-keys.sh atau restore-kunci.sh)"],
+  ["target_not_up", "Server target tidak UP di HAProxy"],
+  ["survivor_not_healthy", "Server lain tidak sehat; serangan ditahan agar layanan tetap jalan"],
+  ["attack_simulation_disabled", "Simulasi serangan nonaktif di remediator"],
+];
 function shortApprovalDetail(approval) {
-  const run = approval.execution_detail || approval.reason || "";
+  const raw = approval.execution_detail || approval.reason || "";
+  const hint = approval.execution_status === "FAILED" && EXECUTION_HINTS.find(([key]) => raw.includes(key));
+  if (hint) return `Gagal: ${hint[1]}`;
+  const run = raw;
   return run.length > 74 ? `${run.slice(0, 74)}…` : run;
 }
 
@@ -326,6 +338,7 @@ function renderState(data) {
     const fresh = Boolean(agent.online);
     const agentText = age == null ? "-" : fresh ? "Online" : "Offline";
     setNodeState(`node-agent-${suffix}`, fresh ? "online" : age == null ? "stale" : "error", agentText);
+    setRoute(`agent-${suffix}`, fresh);
   }
   renderBackends(data);
   displayedEvents.splice(0, displayedEvents.length, ...(Array.isArray(data.events) ? data.events : []));
@@ -483,10 +496,31 @@ async function refreshTrajectories() {
   }
 }
 
+// Kabel (dan titik sambungnya) hijau kalau hidup, merah putus-putus kalau mati.
+function setRoute(name, up) {
+  document.getElementById(`route-${name}`)?.classList.toggle("route-down", !up);
+  document.getElementById(`dot-${name}`)?.classList.toggle("route-down", !up);
+}
+
+// Collector hijau kalau menjawab (termasuk 401: hidup tapi belum login), merah kalau tidak terjangkau.
+function setCollectorState(alive) {
+  const node = document.getElementById("node-collector");
+  if (node && !node.dataset.base) node.dataset.base = "collector-node";
+  setNodeState("node-collector", alive ? "online" : "down", alive ? "Online" : "Offline");
+  if (!alive) {
+    ["agent-a", "agent-b", "proxy", "server-a", "server-b"].forEach((name) => setRoute(name, false));
+    setNodeState("node-proxy", "down", "Tidak diketahui");
+    const chip = $("#chip-proxy");
+    chip.textContent = "OFF";
+    chip.className = "mode-label status-down";
+  }
+}
+
 async function refresh() {
   const connection = $("#connection");
   try {
     const response = await fetch("/v1/dashboard", { cache: "no-store" });
+    setCollectorState(true);
     if (response.status === 401) {
       // Collector hidup tetapi belum ada sesi: minta login, bukan tampilkan "terputus".
       showOperatorModal(operator.username ? "" : "Masuk operatormu untuk melihat dashboard.");
@@ -504,6 +538,7 @@ async function refresh() {
     connection.className = "connection connected";
     connection.lastChild.textContent = "Online";
   } catch (error) {
+    setCollectorState(false);
     $("#load-error").hidden = false;
     connection.className = "connection disconnected";
     connection.lastChild.textContent = "Terputus";

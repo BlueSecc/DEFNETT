@@ -51,12 +51,13 @@ case "$ROLE" in
     put "$SOURCE/approval_authority.py" /opt/defnett/approval_authority.py 644 root
     put "$SOURCE/authority_client.py" /opt/defnett/authority_client.py 644 root
     put "$SOURCE/tls_support.py" /opt/defnett/tls_support.py 644 root
+    put "$SOURCE/web_terminal.py" /opt/defnett/web_terminal.py 644 root
     put "$SOURCE/defnett-collector-network-guard" /usr/local/libexec/defnett-collector-network-guard 750 root
     put "$SOURCE/provision-service-users.sh" /usr/local/sbin/defnett-provision-service-users 750 root
     put "$SOURCE/defnett-collector.service" /etc/systemd/system/defnett-collector.service 644 root
     put "$SOURCE/defnett-executor.service" /etc/systemd/system/defnett-executor.service 644 root
     put "$SOURCE/defnett-approval-authority.service" /etc/systemd/system/defnett-approval-authority.service 644 root
-    for name in index.html dashboard.css dashboard.js patrol.css patrol.js; do
+    for name in index.html dashboard.css dashboard.js patrol.css patrol.js terminal.js; do
       put "$SOURCE/dashboard/$name" "/opt/defnett/dashboard/$name" 644 root
     done
     [ -z "$TOKEN" ] || setenv "$ENV_FILE" LAB_API_TOKEN "$TOKEN"
