@@ -123,9 +123,33 @@ python3 -m unittest discover -s lab/tests
 
 ## Petunjuk penggunaan
 
+### Sebelum mulai
+
+Pastikan hal berikut sudah siap:
+
+- [ ] Lab berjalan (Docker atau empat VM, lihat [Mulai cepat](#mulai-cepat)).
+- [ ] Browser sudah mempercayai sertifikat CA lab, sehingga `https://...:8443/` terbuka tanpa peringatan.
+- [ ] Akun operator dashboard (dibuat `lab/build.sh` atau oleh admin lab).
+- [ ] Untuk tab Terminal: username dan password akun Linux di Server A/B.
+
+Istilah yang dipakai di dashboard:
+
+| Istilah | Arti |
+|---|---|
+| Operator | Orang yang memantau dan memutuskan tindakan. Hanya operator yang bisa menyerang, menyetujui, dan membuka terminal |
+| Approval | Permintaan tindakan yang menunggu keputusan operator: Setujui atau Tolak |
+| Isolasi | Server dikeluarkan dari HAProxy, sehingga pengunjung dilayani server lain |
+| Rejoin | Server dimasukkan kembali ke HAProxy setelah pulih dan lolos health check |
+| Kunci | File contoh `etc/kunci1.dat` dan `etc/kunci2.dat` yang dijaga DEFNETT |
+| Master | Salinan kunci yang sah, dicocokkan dengan manifes sha256 sebelum dipakai memulihkan |
+
 ### 1. Masuk sebagai operator
 
-Klik **Masuk operator** di kanan atas dan isi akun operator. Tanpa login, dashboard hanya menampilkan "Belum masuk": status server, port, dan Playbook tidak dimuat, dan tombol **SERANG!** serta tab **Terminal** tidak bisa dipakai. Akun *viewer* bisa melihat, tetapi tidak bisa menyetujui atau menyerang.
+1. Buka dashboard: `https://192.168.56.20:8443/` (VM) atau `https://127.0.0.1:8443/` (Docker).
+2. Klik **Masuk operator** di kanan atas, isi username dan kata sandi, lalu klik **Masuk**.
+3. Indikator di kanan atas berubah dari "Belum masuk" menjadi **Online**.
+
+Tanpa login, dashboard hanya menampilkan "Belum masuk": status server, port, dan Playbook tidak dimuat, dan tombol **SERANG!** serta tab **Terminal** tidak bisa dipakai. Akun *viewer* bisa melihat, tetapi tidak bisa menyetujui atau menyerang.
 
 ### 2. Tab Overview
 
@@ -324,16 +348,6 @@ Jika lolos ke babak selanjutnya, kami akan:
 | Screenshot | Maks. 5 gambar | `01-overview`, `04-serangan-ssh-masuk`, `04-serangan-patrol`, `06-pulih`, `11-playbook-metrik` di [lab/screenshots](lab/screenshots) |
 | Video | Maks. 10 menit, di YouTube | [isi tautan YouTube] |
 | Slide | Fitur, arsitektur, teknologi | https://www.canva.com/d/iTrcMg9nvcdA7o1 |
-
-**Peta kriteria penilaian**
-
-| Kriteria (bobot) | Bagian di repo |
-|---|---|
-| Relevansi dan manfaat (25%) | [Mengapa DEFNETT](#mengapa-defnett) |
-| Inovasi teknis (25%) | [Arsitektur](#arsitektur), [Dokumentasi Teknis](docs/DOKUMENTASI_TEKNIS.md): persetujuan operator, executor terpisah, rantai bukti |
-| Fungsionalitas purwarupa (25%) | [Mulai cepat](#mulai-cepat), [Petunjuk penggunaan](#petunjuk-penggunaan), [Hasil Uji](docs/HASIL_UJI.md) |
-| Kelayakan implementasi (15%) | [Rencana pengembangan](#rencana-pengembangan), [Batasan](docs/DOKUMENTASI_TEKNIS.md#batasan) |
-| Kualitas dokumentasi (10%) | README ini, Dokumentasi Teknis, slide, video demo |
 
 ## Dokumentasi lanjutan
 
