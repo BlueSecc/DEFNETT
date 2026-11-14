@@ -290,7 +290,7 @@ Rincian ada di [Hasil Uji](docs/HASIL_UJI.md).
 
 ## Tampilan
 
-Screenshot diambil 2 November 2026. Sejak itu dashboard mendapat panel Persetujuan, tab Terminal, warna status di Overview, dan toolbar Patrol di atas kanvas, jadi tampilan terbaru sedikit berbeda.
+Sebagian besar screenshot diambil 2 November 2026. Sejak itu dashboard mendapat panel Persetujuan, warna status di Overview, dan toolbar Patrol di atas kanvas, jadi tampilan terbaru sedikit berbeda. Screenshot tab Terminal diambil 14 November 2026.
 
 Overview:
 
@@ -323,6 +323,10 @@ Serangan lewat Web: intruder masuk lewat pintu 80, dan Server B yang keluar dari
 ![Intruder masuk lewat Web](lab/screenshots/09-serangan-web-masuk.png)
 
 ![Serangan web di Patrol](lab/screenshots/10-serangan-web-patrol.png)
+
+Tab Terminal: operator membuka shell SSH ke Server A langsung dari dashboard dan login dengan akun server itu sendiri.
+
+![Tab Terminal](lab/screenshots/12-terminal.png)
 
 **Situs yang dilayani.** Kedua server melayani blog WordPress di port 80, dan HAProxy membagi trafik ke keduanya. Setiap halaman memuat lencana serta judul **SERVER A** atau **SERVER B**, sehingga server yang menjawab langsung terlihat.
 
@@ -390,7 +394,7 @@ Jika lolos ke babak selanjutnya, kami akan:
 |---|---|---|
 | Link karya | Publik, bisa dicoba juri | https://github.com/BlueSecc/DEFNETT |
 | Thumbnail | 1200×630 px, JPG/PNG/WebP, maks. 500 KB | [docs/thumbnail.jpg](docs/thumbnail.jpg) (1200×630, 117 KB) |
-| Screenshot | Maks. 5 gambar | `01-overview`, `04-serangan-ssh-masuk`, `04-serangan-patrol`, `06-pulih`, `11-playbook-metrik` di [lab/screenshots](lab/screenshots) |
+| Screenshot | Maks. 5 gambar | `01-overview`, `04-serangan-ssh-masuk`, `06-pulih`, `11-playbook-metrik`, `12-terminal` di [lab/screenshots](lab/screenshots) |
 | Video | Maks. 10 menit, di YouTube | [isi tautan YouTube] |
 | Slide | Fitur, arsitektur, teknologi | https://www.canva.com/d/iTrcMg9nvcdA7o1 |
 
