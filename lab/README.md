@@ -58,7 +58,7 @@ Urutan visual mengikuti tahap asli dari `/v1/dashboard`; tiap tahap punya durasi
 
 Tombol **Serang!** mewakili permintaan operator, bukan eksekusi otomatis: `POST /v1/lab/attack/<host>` (butuh sesi operator + header CSRF) membuat persetujuan `SIMULATE_LAB_ATTACK` yang langsung disetujui oleh operator yang memintanya, lalu executor mengirim `POST /lab/attack` ke worker host target untuk menambah satu baris penanda ke `etc/kunci1.dat`. Agent mendeteksi perubahan itu, Policy Gate menulis persetujuan baru, dan playbook respons hanya berjalan setelah operator menyetujuinya di panel Persetujuan: server dikeluarkan dari HAProxy (`disable server`), file dikarantina, dipulihkan dari salinan master yang cocok manifes, dan server masuk kembali setelah health check lolos. Status di dashboard dibaca dari HAProxy; `MAINT` ditampilkan sebagai `DOWN`. Pilihan **SSH / Web** di sebelahnya menentukan pintu yang dilewati intruder di peta (`?vector=ssh` atau `?vector=web`); jalur masuknya simulasi, tidak ada serangan nyata ke SSH atau WordPress. Tombol ini butuh `LAB_ATTACK_SIMULATION=true` di remediator dan ditolak bila server lain tidak `UP` atau kunci belum pulih. Server yang tersangkut terisolasi dipulihkan operator dengan **Persetujuan → Rejoin backend** (atau `POST /v1/lab/recover/<host>`, juga butuh sesi operator).
 
-Jumlah pintu tiap server mengikuti port TCP yang terbuka. Agent membaca `/proc/net/tcp` dan melaporkannya lewat heartbeat, jadi port yang hanya di loopback (misalnya MariaDB) tidak menjadi pintu, dan peta menampilkan paling banyak 6 pintu. Bila `AUTH_LOG` dan `WEB_LOG` diisi, agent juga membaca log login: login SSH berhasil dan login `wp-login.php` berhasil membuat intruder masuk lewat pintu port itu, sedangkan login gagal berhenti di pintu dengan tanda DENIED. Login SSH memakai kunci dianggap admin dan tidak ditampilkan; atur lewat `TRUSTED_SSH_METHODS`. Pasang di VM dengan `lab/vm/deploy-port-doors.sh`.
+Jumlah pintu tiap server mengikuti port TCP yang terbuka. Agent membaca `/proc/net/tcp` dan melaporkannya lewat heartbeat, jadi port yang hanya di loopback (misalnya MariaDB) tidak menjadi pintu, dan peta menampilkan paling banyak 6 pintu. Bila `AUTH_LOG` dan `WEB_LOG` diisi, agent juga membaca log login: login SSH berhasil dan login `wp-login.php` berhasil membuat intruder masuk lewat pintu port itu, sedangkan login gagal berhenti di pintu dengan tanda DENIED. Login SSH memakai kunci dianggap admin dan tidak ditampilkan; atur lewat `TRUSTED_SSH_METHODS`. Di lab VM, versi terbaru dipasang lewat cutover (lihat [docs/INSTALASI.md](../docs/INSTALASI.md)).
 
 Pilih **Patrol → Mulai demo** untuk menghasilkan dua aktor sintetis dengan aksi berbeda. Simulator ini hanya berjalan pada browser dan tidak menulis file atau mengirim event palsu ke database. Event live berasal dari request ke app (`/` atau `/files/<path>`) serta event integritas agent. App hanya menyajikan file relatif yang terdaftar di `PATROL_PUBLIC_FILES` (default `index.txt`); file lain, file sensitif, dan metode tulis ditolak serta dicatat sebagai event. `WATCH_ROOT` pada tiap agent menentukan folder yang dipatroli. Analisis severity tetap berbasis aturan, bukan model AI terlatih.
 
@@ -130,7 +130,6 @@ Tab **File** di sidebar menampilkan isi file system tiap server per folder, buka
 - Deteksi perubahan, alert, dan hewan patroli di kanvas tetap memakai `WATCH_ROOT`, yaitu `/data`.
 - `/proc`, `/sys`, `/dev`, dan `/run` tampil sebagai virtual dan tidak dipindai.
 - Di VM, `INVENTORY_ROOT=/`. Bila tidak diatur, nilainya mengikuti `WATCH_ROOT`, sehingga lab Docker hanya menampilkan `/watched`.
-- Pasang di VM dengan `lab/vm/deploy-inventory.sh`, yang menyimpan file lama sebagai `*.bak-<waktu>`.
 
 ## Struktur /data: pohon ala Linux
 
@@ -148,14 +147,6 @@ Aturan yang tetap berlaku:
 - Hanya path yang terdaftar di `PATROL_PUBLIC_FILES` (index, beberapa config distro, dan catatan di `home/kartika/...`) yang bisa dibaca lewat HAProxy; sisanya ditolak 403 dan dicatat sebagai event denied.
 - `etc/kunci1.dat` dan `etc/kunci2.dat` adalah kunci rahasia: sengaja tidak didaftarkan sehingga selalu ditolak (di peta muncul sebagai ikon kunci emas dan menjadi target animasi "Serang!").
 - `DEFNETT-LAB-CANARY.txt` harus tetap di akar `/data` karena playbook canary dan worker memakai jalur tetap itu. Restart agent setelah seed ulang agar baseline FIM segar tanpa event palsu.
-
-## Demo perubahan file
-
-```sh
-sh lab/demo.sh
-```
-
-Agent akan mendeteksi perubahan `etc/new-config.txt` pada Server A dan mengirim event ke collector. Event hanya dicatat (bukan canary/kunci); endpoint layanan tetap berjalan melalui HAProxy.
 
 ## Waktu respons, jalur masuk, dan rantai bukti
 
@@ -187,7 +178,6 @@ python3 -m unittest discover -s lab/tests
 | Skrip | Fungsi |
 |---|---|
 | `sh lab/build.sh` | Bangun image, hidupkan lab lengkap, buat token m2m, siapkan akun operator pertama, isi data contoh, dan siapkan salinan master + manifes dalam satu perintah. |
-| `sh lab/demo.sh` | Simulasi operator: ubah `etc/new-config.txt`, lalu lihat event/hash chain di collector. |
 | `sh lab/attack.sh` | Simulasi pencuri lewat HAProxy: mengintip file publik, menebak nama sensitif, lalu mencoba `etc/kunci1.dat`/`etc/kunci2.dat` termasuk `?download=1` — setiap percobaan ditolak 403 dan muncul sebagai event denied (animasi pencuri di Patrol bergolak). |
 | `sh lab/test-containment.sh` | Uji playbook penuh lewat login operator: dapatkan persetujuan, setujui, tunggu isolasi → karantina → verifikasi → rejoin + asersi trafik sebelum/selama/sesudah. |
 | `sh lab/seed-fs.sh` (via `docker exec -i`) | Seed ulang pohon `/data` ala Linux; lihat bagian "Struktur /data" di atas. |
