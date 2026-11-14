@@ -17,18 +17,18 @@
   image-rendering: pixelated;
 }
 
-/* Floating Controls */
+/* Toolbar di atas kanvas, tidak lagi menutupi ruang Server A */
 .patrol-controls-floating {
-  position: absolute;
-  top: 12px;
-  bottom: auto;
-  left: 12px;
-  max-width: 190px;
+  position: static;
+  order: -1;
+  margin-bottom: 8px;
+  max-width: none;
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
   background: rgba(11, 15, 18, 0.85);
-  padding: 12px;
+  padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
   backdrop-filter: blur(8px);
@@ -58,14 +58,14 @@
 /* Incident Overlay — Critical Alert */
 .incident-overlay {
   position: absolute;
-  top: 12px;
+  top: 6px;
   bottom: auto;
   left: auto;
-  right: 12px;
-  width: min(260px, calc(100% - 24px));
-  background: rgba(11, 15, 18, 0.92);
+  right: 8px;
+  width: min(420px, calc(100% - 16px));
+  background: rgba(11, 15, 18, 0.95);
   color: #fff;
-  padding: 10px 16px;
+  padding: 6px 12px;
   border-radius: 8px;
   z-index: 110;
   box-shadow: 0 10px 30px rgba(0,0,0,0.6);
@@ -81,11 +81,11 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 14px;
-  margin-bottom: 8px;
+  gap: 2px 12px;
+  margin-bottom: 5px;
 }
-.incident-head strong { flex: 1 1 auto; color: var(--incident-color, #fff); font-size: 17px; font-weight: 900; letter-spacing: 0.04em; }
-.incident-head span { font-family: var(--font-mono); font-size: 13px; font-weight: 700; white-space: pre; }
+.incident-head strong { flex: 1 1 100%; color: var(--incident-color, #fff); font-size: 13px; font-weight: 900; letter-spacing: 0.04em; }
+.incident-head span { font-family: var(--font-mono); font-size: 11px; font-weight: 700; white-space: pre; }
 .incident-timer:empty { display: none; }
 .incident-steps { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .incident-steps li { flex: 1; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.16); transition: background 0.3s ease; }

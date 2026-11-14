@@ -31,9 +31,10 @@ cd "$root_dir"
 compose up -d --build --wait
 
 printf '%s\n' '[3/5] Menyiapkan operator dan data demo...'
-if ! compose run --rm -T approval-authority test -f /ops/operator_auth.json 2>/dev/null; then
+# Image memakai ENTRYPOINT ["python"]; perintah selain python wajib --entrypoint.
+if ! compose run --rm -T --no-deps --entrypoint test approval-authority -f /ops/operator_auth.json 2>/dev/null; then
     admin_password=$(python3 -c 'import secrets; print(secrets.token_urlsafe(18))')
-    printf '%s\n' "$admin_password" | compose run --rm -T approval-authority python /opt/defnett/provision_operators.py \
+    printf '%s\n' "$admin_password" | compose run --rm -T --no-deps approval-authority /opt/defnett/provision_operators.py \
         --file /ops/operator_auth.json --add admin --role operator --password-stdin >/dev/null
     printf '   Akun operator dashboard: admin\n'
     printf '   Kata sandi (simpan!): %s\n' "$admin_password"
@@ -42,7 +43,8 @@ else
 fi
 for host in server-a server-b; do
     if ! compose exec -T "$host" test -f /data/etc/kunci1.dat; then
-        existing=$(compose exec -T "$host" sh -c 'find /data -mindepth 1 -print -quit')
+        # app.py selalu menulis index.txt saat start; seed menimpanya.
+        existing=$(compose exec -T "$host" sh -c 'find /data -mindepth 1 ! -path /data/index.txt -print -quit')
         if [ -n "$existing" ]; then
             printf '   Data %s ada tetapi baseline seed tidak lengkap; tidak diubah.\n' "$host" >&2
             exit 1
@@ -51,13 +53,23 @@ for host in server-a server-b; do
     fi
 done
 compose restart remediator-a remediator-b agent-a agent-b
-printf '%s\n' '   Trust anchor harus diprovisikan manual dari baseline tepercaya eksternal.'
-printf '%s\n' '   build.sh tidak membaca /data untuk membuat master atau manifest.'
+# Trust anchor demo: baseline dibangun dari lab/seed-fs.sh di container sekali
+# pakai (tanpa volume /data), lalu provision_master.py menulis master + manifest.
+# build.sh tidak pernah membaca /data aktif. Matikan dengan
+# DEFNETT_DEMO_TRUST_ANCHOR=0 bila memakai baseline eksternal sendiri.
+demo_anchor=${DEFNETT_DEMO_TRUST_ANCHOR:-1}
 for host in server-a server-b; do
     suffix=${host#server-}
-    if docker run --rm -v "${project}_manifest_${suffix}_data:/manifest:ro" defnett-lab:local \
-        python -c "import os,sys; sys.exit(0 if os.path.exists('/manifest/keys.json') else 1)"; then
+    if docker run --rm --entrypoint test -v "${project}_manifest_${suffix}_data:/manifest:ro" defnett-lab:local \
+        -f /manifest/keys.json; then
         printf '   %s: manifest tersedia, dipertahankan.\n' "$host"
+    elif [ "$demo_anchor" = 1 ]; then
+        docker run --rm --user root --entrypoint sh \
+            -v "${project}_master_${suffix}_data:/master" \
+            -v "${project}_manifest_${suffix}_data:/manifest" \
+            -v "$root_dir/lab/seed-fs.sh:/seed-fs.sh:ro" \
+            defnett-lab:local -c "sh /seed-fs.sh $host >/dev/null && python /opt/defnett/provision_master.py --source /data --master /master --manifest /manifest/keys.json >/dev/null && chown -R 10001:10001 /master /manifest"
+        printf '   %s: trust anchor demo diprovisikan dari lab/seed-fs.sh (bukan dari /data aktif).\n' "$host"
     else
         printf '   %s: manifest belum ada; recovery akan menolak sampai provisioning tepercaya dilakukan.\n' "$host"
     fi
