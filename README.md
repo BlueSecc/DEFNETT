@@ -10,7 +10,7 @@ Karya untuk **Kartika Cyber Hackathon 2026**, kategori **Penangkalan**.
 |---|---|
 | Repositori | https://github.com/BlueSecc/DEFNETT |
 | Slide penjelasan | https://canva.link/o3dvs4lon8z77sc |
-| Video demo | https://github.com/BlueSecc/DEFNETT |
+| Video demo | https://youtu.be/Qc8GpMF1VRk |
 
 ## Coba dalam 5 menit
 
@@ -395,7 +395,7 @@ Jika lolos ke babak selanjutnya, kami akan:
 | Link karya | Publik, bisa dicoba juri | https://github.com/BlueSecc/DEFNETT |
 | Thumbnail | 1200×630 px, JPG/PNG/WebP, maks. 500 KB | [docs/thumbnail.jpg](docs/thumbnail.jpg) (1200×630, 117 KB) |
 | Screenshot | Maks. 5 gambar | `01-overview`, `04-serangan-ssh-masuk`, `06-pulih`, `11-playbook-metrik`, `12-terminal` di [lab/screenshots](lab/screenshots) |
-| Video | Maks. 10 menit, di YouTube | [isi tautan YouTube] |
+| Video | Maks. 10 menit, di YouTube | https://youtu.be/Qc8GpMF1VRk |
 | Slide | Fitur, arsitektur, teknologi | https://www.canva.com/d/iTrcMg9nvcdA7o1 |
 
 ## Dokumentasi lanjutan
