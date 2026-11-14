@@ -23,16 +23,126 @@ Pilih salah satu:
 - **Empat VM VirtualBox:** konfigurasi ada di [lab/vm](lab/vm); dashboard HTTPS di `https://192.168.56.20:8443/` setelah [TLS dan Approval Authority cutover](lab/vm/SECURITY_CUTOVER_RUNBOOK.md).
 - **Tanpa menjalankan apa pun:** lihat bagian Tampilan di bawah dan video demo.
 
-Setelah dashboard terbuka, masuk sebagai operator, pilih tab **Patrol**, pilih server dan jalur (SSH atau Web), lalu tekan **Serang!**. Temuan muncul sebagai peringatan; tekan **Setujui** di panel Persetujuan agar playbook dijalankan.
+Langkah lengkapnya ada di [Petunjuk penggunaan](#petunjuk-penggunaan).
 
 Pengujian otomatis: `python3 -m unittest discover -s lab/tests`. Dokumen lengkap: [Dokumentasi Teknis](docs/DOKUMENTASI_TEKNIS.md) dan [Hasil Uji](docs/HASIL_UJI.md).
+
+## Petunjuk penggunaan
+
+### 1. Menyiapkan lab
+
+**Docker (satu komputer)**
+
+```bash
+sh lab/build.sh
+```
+
+Skrip menyiapkan token, sertifikat CA lab, data contoh, dan trust anchor, lalu mencetak kata sandi akun operator `admin`. Simpan kata sandi itu. Percayai `~/.config/defnett-lab/tls/ca.crt` di browser, lalu buka `https://127.0.0.1:8443/`. Di Docker, Patrol hanya menampilkan satu pintu karena agent berjalan di container terpisah; tab Terminal tidak dipakai.
+
+**Empat VM VirtualBox (jaringan host-only `192.168.56.0/24`)**
+
+| VM | Alamat | Isi |
+|---|---|---|
+| Gateway | `192.168.56.10` | HAProxy, situs di `http://192.168.56.10:8080/` |
+| Server A | `192.168.56.11` | Blog WordPress, agent, remediator |
+| Server B | `192.168.56.12` | Blog WordPress, agent, remediator |
+| Collector | `192.168.56.20` | Dashboard `https://192.168.56.20:8443/`, Approval Authority, Executor |
+
+Konfigurasi tiap VM ada di [lab/vm](lab/vm). Pembaruan dikirim dari laptop dengan skrip berikut; password SSH dan sudo diketik sendiri, dan file lama selalu dicadangkan sebagai `<nama>.bak-<waktu>`.
+
+| Perintah | Kegunaan |
+|---|---|
+| `sh lab/vm/deploy-dashboard.sh` | Kirim file dashboard ke Collector (tanpa restart) |
+| `sh lab/vm/deploy-terminal.sh` | Kirim `collector.py`, `web_terminal.py`, dan dashboard, restart Collector, lalu izinkan SSH dari Collector di ufw Server A/B. Tambah `SKIP_FIREWALL=1` bila aturan ufw sudah ada |
+| `sh lab/vm/fix-server-a-keys.sh` | Pulihkan kunci Server A dari `/master` secara manual (menampilkan alasan gagal dulu, lalu minta konfirmasi `y`) |
+
+### 2. Masuk sebagai operator
+
+Klik **Masuk operator** di kanan atas dan isi akun operator. Tanpa login, dashboard hanya menampilkan "Belum masuk": status server, port, dan Playbook tidak dimuat, dan tombol **SERANG!** serta tab **Terminal** tidak bisa dipakai. Akun *viewer* bisa melihat, tetapi tidak bisa menyetujui atau menyerang.
+
+### 3. Tab Overview
+
+Peta topologi Operator → Collector → HAProxy → Server A/B, plus status ringkas di baris atas.
+
+- **Node dan kabel hijau:** komponen hidup dan tersambung.
+- **Merah putus-putus:** mati atau terputus. Contohnya kabel HAProxy → Server A saat Server A diisolasi, atau semuanya merah bila Collector tidak terjangkau.
+- **LB:** hijau selama minimal satu server masih UP (situs tetap melayani), merah bila tidak ada server UP.
+
+### 4. Tab Patrol
+
+Visualisasi game dari aktivitas di kedua server:
+
+- **Polisi AI** berpatroli memeriksa hash file. **Satpam** menjaga pos dan memperbaiki file.
+- **Pintu** di bawah tiap ruang adalah port yang terbuka di server: `22 SSH`, `80 HTTP`, `8080 APP`, `8091 REPAIR`.
+- **Penyusup** masuk lewat pintu port. Bila server diisolasi, semua pintu tertutup dan penyusup terjebak, lalu dilumpuhkan saat perbaikan.
+
+Dua cara memicu serangan:
+
+1. **Demo** (simulasi lokal di browser, tidak mengubah server): klik **Demo**. Penyusup bergantian masuk ke Server A dan B lewat port acak, server yang dibobol diisolasi, diperbaiki, lalu kembali online; server lain tetap melayani dan menolak penyusup di pintunya. Klik **Hentikan demo** untuk berhenti.
+2. **SERANG!** (serangan lab sungguhan): pilih **Server A** atau **Server B**, pilih jalur **SSH** atau **Web**, lalu tekan **SERANG!**. Executor menambahkan satu baris penanda ke `etc/kunci1.dat` di server target, agent mendeteksinya, dan approval pemulihan muncul di tab Playbook.
+
+**SERANG!** ditolak bila server target atau server lainnya tidak UP (supaya situs tetap hidup), atau bila kunci server masih rusak dari serangan sebelumnya. Alasannya tampil di samping tombol.
+
+### 5. Tab Playbook (di panel Detail)
+
+Klik **Detail**, lalu tab **Playbook**. Di sini operator memutuskan:
+
+| Tombol | Akibat |
+|---|---|
+| **Setujui** | Server dikeluarkan dari HAProxy, file rusak dikarantina, kunci dipulihkan dari master yang cocok manifes sha256, health check, lalu server masuk kembali ke rotasi |
+| **Tolak** | Tidak ada tindakan. Server tetap melayani, penyusup pergi, tetapi kunci dibiarkan rusak |
+| **Pulihkan kunci** | Muncul setelah Tolak atau approval kedaluwarsa. Membuat approval pemulihan baru (tetap harus disetujui) |
+
+Approval kedaluwarsa setelah 15 menit. Selama kunci belum dipulihkan, **SERANG!** ke server itu akan gagal dengan alasan *kunci masih rusak*; pakai **Pulihkan kunci → Setujui** untuk membereskannya. Tahapan playbook dan waktu deteksi, isolasi, dan pulih tercatat di panel yang sama.
+
+### 6. Tab Terminal
+
+Shell SSH ke Server A atau Server B langsung dari dashboard (lab VM saja):
+
+1. Buka tab **Terminal**, pilih **Server A** atau **Server B**.
+2. Isi **username** akun server, lalu klik **Hubungkan**.
+3. Ketik **password server** saat prompt `...'s password:` muncul di terminal.
+4. Ketik `exit` atau klik **Putuskan** bila selesai.
+
+Login tetap memakai akun server itu sendiri; kunci SSH tidak dipakai dan password tidak disimpan. Hanya operator yang bisa membuka terminal, maksimal 2 sesi per operator, dan sesi yang menganggur 15 menit ditutup otomatis. Tampilan terminal memakai xterm.js dari `cdn.jsdelivr.net`, jadi browser perlu akses internet.
+
+### 7. Skenario demo lengkap
+
+1. Buka dashboard, masuk sebagai operator, lalu buka `http://192.168.56.10:8080/` di tab lain dan muat ulang beberapa kali: judul blog berganti antara **SERVER A** dan **SERVER B**.
+2. Di tab **Patrol**, pilih **Server A** dan **SSH**, lalu tekan **SERANG!**. Penyusup masuk lewat pintu 22 dan mengubah file kunci.
+3. Buka **Detail → Playbook**, tekan **Setujui** pada approval *Pulihkan kunci dari master*.
+4. Amati: pintu Server A tertutup, kabel HAProxy putus (Overview merah untuk Server A), blog tetap tampil lewat Server B, penyusup dilumpuhkan, file diverifikasi, dan Server A kembali online.
+5. Ulangi dengan **Server B** dan **Web**, lalu coba **Tolak** dan **Pulihkan kunci** untuk melihat alur penolakan.
+
+### 8. Pemecahan masalah
+
+| Gejala | Penyebab | Solusi |
+|---|---|---|
+| Dashboard menampilkan "Belum masuk" dan data kosong | Belum login operator | Klik **Masuk operator** |
+| **SERANG!** abu-abu | Server sedang insiden atau tidak UP | Tunggu insiden selesai atau cek status di Overview |
+| **SERANG!** jalan tetapi tidak terjadi apa-apa | Kunci masih rusak (`key_not_pristine`) | **Detail → Playbook → Pulihkan kunci → Setujui** |
+| Approval berstatus EXPIRED | Tidak disetujui dalam 15 menit | **Pulihkan kunci**, lalu Setujui |
+| Terminal: "xterm.js tidak bisa dimuat" | Browser tanpa akses internet | Sambungkan laptop ke internet |
+| Terminal langsung tertutup | SSH dari Collector diblok ufw | Jalankan `sh lab/vm/deploy-terminal.sh` atau cek aturan ufw di bawah |
+
+Mengecek firewall di sebuah VM:
+
+```bash
+sudo ufw status numbered
+```
+
+Membandingkan dengan port yang benar-benar terbuka:
+
+```bash
+ss -ltn
+```
 
 ## Hasil uji
 
 - **Uji lab dengan persetujuan operator, 3 November 2026:** enam insiden di empat VM (Server A dan B, jalur SSH dan Web), semuanya disetujui operator, diisolasi, dan pulih. 506 permintaan ke blog selama uji semuanya HTTP 200. Deteksi 0,4–2,8 detik, isolasi 0,05–0,34 detik setelah disetujui, pemulihan 0,5–2,0 detik di luar jeda demo. Rantai bukti utuh.
 - **Uji keamanan VM:** TLS (CA tak dikenal, hostname salah, dan sertifikat kedaluwarsa ditolak), token, viewer tidak bisa menyetujui, Collector tidak bisa menjangkau HAProxy maupun remediator, dan login gagal tertutup saat Approval Authority mati.
 - **Uji browser:** login, Serang, Setujui, Tolak, dan logout lewat Safari dengan HTTPS tepercaya.
-- **Uji otomatis:** 94 test, 93 lulus dan 1 dilewati di macOS (butuh alamat `127.0.0.2`, yang hanya ada di Linux).
+- **Uji otomatis:** 96 test, 95 lulus dan 1 dilewati di macOS (butuh alamat `127.0.0.2`, yang hanya ada di Linux).
 - **Belum diuji:** jalur Docker dan gateway OT Modbus di deployment.
 
 Rincian ada di [Hasil Uji](docs/HASIL_UJI.md).
@@ -47,7 +157,7 @@ Sesuai bagian G rulebook. Batas akhir 15 November 2026 pukul 23:59 WIB.
 | Thumbnail | 1200×630 px, JPG/PNG/WebP, maks. 500 KB | [docs/thumbnail.jpg](docs/thumbnail.jpg) (1200×630, 117 KB) |
 | Screenshot | Maks. 5 gambar | `01-overview`, `04-serangan-ssh-masuk`, `04-serangan-patrol`, `06-pulih`, `11-playbook-metrik` di [lab/screenshots](lab/screenshots) |
 | Video | Maks. 10 menit, di YouTube | [isi tautan YouTube] |
-| Slide | Fitur, arsitektur, teknologi | [isi tautan slide] |
+| Slide | Fitur, arsitektur, teknologi | https://www.canva.com/d/iTrcMg9nvcdA7o1 |
 
 Kategori: **Penangkalan**. Tim maksimal 3 orang.
 
@@ -78,7 +188,7 @@ Overview:
 
 ![Overview](lab/screenshots/01-overview.png)
 
-Patrol. Jumlah pintu tiap server mengikuti port yang benar-benar terbuka (`22 SSH`, `80 HTTP`, `8080 APP`, `8091 WORKER`):
+Patrol. Jumlah pintu tiap server mengikuti port yang benar-benar terbuka (`22 SSH`, `80 HTTP`, `8080 APP`, `8091 REPAIR`):
 
 ![Patrol](lab/screenshots/02-patrol.png)
 
