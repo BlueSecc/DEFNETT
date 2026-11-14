@@ -35,7 +35,8 @@ esac
 tmp_cookie=$(mktemp)
 tmp_login=$(mktemp)
 trap 'rm -f "$tmp_cookie" "$tmp_login"' EXIT
-base_url="http://127.0.0.1:8090"
+base_url="https://127.0.0.1:8443"
+CURL_CA_BUNDLE="${DEFNETT_TLS_DIR:-$HOME/.config/defnett-lab/tls}/ca.crt"; export CURL_CA_BUNDLE
 
 printf '%s\n' 'Login operator...'
 curl --fail --silent --show-error \
@@ -49,7 +50,7 @@ curl --fail --silent --show-error \
     "$base_url/v1/operator/login" > "$tmp_login"
 csrf=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["csrf"])' < "$tmp_login")
 case "$csrf" in
-    ""|[!w-]*) printf '%s\n' 'Login sukses tapi CSRF tidak terbaca.' >&2; exit 1 ;;
+    ""|*[!A-Za-z0-9_-]*) printf '%s\n' 'Login sukses tapi CSRF tidak terbaca.' >&2; exit 1 ;;
 esac
 
 # Dashboard dan evidence harus bisa dibaca dengan sesi ini (kerahasiaan GET).
@@ -161,8 +162,8 @@ for i in 1 2 3 4; do
     response=$(curl --fail --silent --show-error --max-time 5 http://127.0.0.1:8080/)
     printf 'Request %s: %s\n' "$i" "$(printf '%s' "$response" | head -n 1)"
     case "$response" in
-        *"response from server-a"*) seen_a=1 ;;
-        *"response from server-b"*) seen_b=1 ;;
+        *"server-a online"*) seen_a=1 ;;
+        *"server-b online"*) seen_b=1 ;;
         *) printf '%s\n' 'Request tidak cocok dengan backend yang diharapkan.' >&2; exit 1 ;;
     esac
 done
@@ -184,9 +185,9 @@ TARGET_HOST="$target_host" SURVIVOR_HOST="$survivor_host" curl --fail --silent -
     printf '%s\n' 'Dashboard trafik tidak terbaca.' >&2
     exit 1
 }
-TARGET_HOST="$target_host" SURVIVOR_HOST="$survivor_host" python3 - <<'PY' < "$tmp_login"
+DASH_FILE="$tmp_login" TARGET_HOST="$target_host" SURVIVOR_HOST="$survivor_host" python3 - <<'PY'
 import json, os, sys
-traffic = (json.load(sys.stdin).get("traffic") or {})
+traffic = (json.load(open(os.environ["DASH_FILE"])).get("traffic") or {})
 if not traffic.get("enabled"):
     raise SystemExit("Probe trafik nonaktif; set TRAFFIC_PROBE_ENABLED=true untuk pemeriksaan ini.")
 windows = traffic["windows"]

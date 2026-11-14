@@ -7,7 +7,7 @@ WORKDIR /opt/defnett
 COPY app.py agent.py collector.py remediator.py executor.py \
      db.py policy_gate.py approvals.py operator_auth.py trajectory.py risk_engine.py modbus_lab.py \
      approval_authority.py authority_client.py tls_support.py \
-     provision_operators.py provision_master.py /opt/defnett/
+     provision_operators.py provision_master.py web_terminal.py /opt/defnett/
 COPY dashboard/ /opt/defnett/dashboard/
 COPY ot-policy.json /opt/defnett/ot-policy.json
 

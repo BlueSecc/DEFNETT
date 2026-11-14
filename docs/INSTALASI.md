@@ -93,7 +93,7 @@ Yang tersedia di versi Docker:
 | Pintu per port di Patrol | Satu pintu saja, karena agent berjalan di container terpisah |
 | Tab Terminal | Tidak, karena hanya untuk lab VM |
 
-Uji otomatis alur lengkap (opsional). Skrip ini login sebagai operator, memicu insiden, menyetujui, lalu memeriksa isolasi dan pemulihan:
+Uji otomatis alur lengkap (opsional). Skrip ini login sebagai operator, memicu insiden, menyetujui, lalu memeriksa isolasi dan pemulihan. Ganti `<kata-sandi>` dengan kata sandi dari langkah A3:
 
 ```bash
 DEFNETT_OPERATOR_USER=admin DEFNETT_OPERATOR_PASSWORD='<kata-sandi>' sh lab/test-containment.sh
@@ -492,6 +492,7 @@ Tutup dan buka lagi browser setelah mengimpor.
 
 | Gejala | Penyebab umum | Solusi |
 |---|---|---|
+| `build.sh`: `TLS handshake timeout` atau `failed to resolve source metadata` | Koneksi ke Docker Hub terputus saat mengunduh image Python | Cek internet, lalu jalankan ulang `sh lab/build.sh` |
 | `docker compose` tidak dikenal | Compose v2 belum terpasang | Pasang Docker Desktop terbaru atau plugin `docker-compose-plugin` |
 | Browser: "Your connection is not private" | CA lab belum dipercaya | Lihat [Mempercayai CA lab](#mempercayai-ca-lab) |
 | VM tidak bisa di-ping dari laptop | Adapter 2 bukan host-only `defnett`, atau nama interface di netplan salah | Cek setelan VM dan `ip link`, perbaiki `/etc/netplan/01-lab.yaml`, jalankan `sudo netplan apply` |
