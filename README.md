@@ -338,7 +338,6 @@ Seluruh kode di atas dibuat tim selama periode program, mulai Oktober 2026. Kary
 | Python, SQLite | PSF, domain publik | Runtime dan penyimpanan bukti |
 | xterm.js | MIT | Tampilan tab Terminal, dimuat dari CDN |
 | Docker, VirtualBox | Apache-2.0, GPL-2.0 | Menjalankan lab |
-| Playwright | Apache-2.0 | Hanya untuk mengambil screenshot (`lab/screenshot-dashboard.js`), bukan bagian sistem yang berjalan |
 
 Dataset untuk eksperimen luring skor risiko tidak disertakan di repo karena ukurannya, dan tidak dipakai saat sistem berjalan:
 
