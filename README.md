@@ -9,7 +9,7 @@ Karya untuk **Kartika Cyber Hackathon 2026**, kategori **Penangkalan**.
 | | |
 |---|---|
 | Repositori | https://github.com/BlueSecc/DEFNETT |
-| Slide penjelasan | https://www.canva.com/d/iTrcMg9nvcdA7o1 |
+| Slide penjelasan | https://canva.link/o3dvs4lon8z77sc |
 | Video demo | https://github.com/BlueSecc/DEFNETT |
 
 ## Coba dalam 5 menit
