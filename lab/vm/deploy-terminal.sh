@@ -3,6 +3,7 @@
 # Pemakaian dari laptop: sh lab/vm/deploy-terminal.sh
 #  1) collector: collector.py + web_terminal.py + file dashboard, lalu restart defnett-collector
 #  2) server-a & server-b: ufw izinkan SSH (22) dari collector 192.168.56.20
+# SKIP_FIREWALL=1 melewati langkah 2 bila aturan ufw sudah terpasang.
 # Password SSH dan sudo diketik sendiri. File lama disalin ke <nama>.bak-<waktu>.
 set -eu
 
@@ -12,8 +13,9 @@ LAB="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 SOCK="${TMPDIR:-/tmp}/defnett-ssh-term-$$"
 SSH="ssh -o ControlMaster=auto -o ControlPath=$SOCK -o ControlPersist=120"
 DASH="index.html dashboard.css dashboard.js patrol.css patrol.js terminal.js"
-# sha256 collector.py versi repo sebelum fitur terminal (commit 3b14242); VM lain tidak ditimpa diam-diam
-BASE_SHA="2ef009c38e0c01bb18ac69e08ba9371c03cd32139a9bf39ec97b66616c0abef1"
+# collector.py di VM hanya ditimpa bila sama dengan versi commit terakhir (HEAD) atau sudah sama
+# dengan file baru; perubahan yang hanya ada di VM tidak hilang diam-diam (FORCE=1 untuk memaksa).
+BASE_SHA="$(git -C "$LAB" show HEAD:lab/collector.py | shasum -a 256 | cut -d' ' -f1)"
 
 echo "== 1/2 collector ($COLLECTOR)"
 $SSH "$COLLECTOR" 'rm -rf /tmp/defnett-term && mkdir -p /tmp/defnett-term/dashboard'
@@ -39,6 +41,7 @@ $SSH -t "$COLLECTOR" 'sudo sh -c "
 "'
 $SSH -O exit "$COLLECTOR" 2>/dev/null || true
 
+[ "${SKIP_FIREWALL:-0}" != 1 ] || { echo "firewall dilewati (SKIP_FIREWALL=1)"; exit 0; }
 echo "== 2/2 firewall server: izinkan SSH dari collector"
 for target in $SERVERS; do
   echo "-- $target"

@@ -188,7 +188,7 @@ function isOperator() {
 }
 
 const EXECUTION_HINTS = [
-  ["key_not_pristine", "Kunci server masih rusak dari serangan lama; pulihkan dulu (lab/vm/fix-server-a-keys.sh atau restore-kunci.sh)"],
+  ["key_not_pristine", "Kunci server masih rusak dari serangan sebelumnya; tekan Pulihkan kunci lalu Setujui"],
   ["target_not_up", "Server target tidak UP di HAProxy"],
   ["survivor_not_healthy", "Server lain tidak sehat; serangan ditahan agar layanan tetap jalan"],
   ["attack_simulation_disabled", "Simulasi serangan nonaktif di remediator"],
@@ -220,6 +220,18 @@ function renderApprovals(approvals) {
     empty.textContent = "Tidak ada persetujuan berjalan.";
     list.append(empty);
     return;
+  }
+  // Per host, lihat approval kunci/serangan terbaru: bila kunci ditinggal rusak (pemulihan
+  // ditolak/kedaluwarsa, atau serangan gagal key_not_pristine), tawarkan minta pemulihan ulang.
+  const restoreOffer = new Set();
+  const seenHosts = new Set();
+  for (const approval of approvals) {
+    if (seenHosts.has(approval.host_id) || !["RESTORE_KEYS", "SIMULATE_LAB_ATTACK"].includes(approval.action)) continue;
+    seenHosts.add(approval.host_id);
+    const restoreDropped = approval.action === "RESTORE_KEYS" && ["REJECTED", "EXPIRED"].includes(approval.approval_status);
+    const attackBlocked = approval.action === "SIMULATE_LAB_ATTACK" && approval.execution_status === "FAILED"
+      && String(approval.execution_detail || "").includes("key_not_pristine");
+    if (restoreDropped || attackBlocked) restoreOffer.add(approval.id);
   }
   for (const approval of approvals) {
     const row = document.createElement("li");
@@ -274,6 +286,19 @@ function renderApprovals(approvals) {
           refreshApprovals();
         });
         actionRow.append(runButton);
+      } else if (restoreOffer.has(approval.id)) {
+        const restoreButton = document.createElement("button");
+        restoreButton.className = "approval-btn";
+        restoreButton.type = "button";
+        restoreButton.textContent = "Pulihkan kunci";
+        restoreButton.title = "Buat approval pemulihan kunci baru (tetap perlu Setujui)";
+        restoreButton.addEventListener("click", async () => {
+          restoreButton.disabled = true;
+          const response = await apiPost(`/v1/lab/restore-keys/${approval.host_id}`);
+          if (!response.ok) attackNoticeMsg(await response.text());
+          refreshApprovals();
+        });
+        actionRow.append(restoreButton);
       }
     }
     row.append(head, detail, actionRow);

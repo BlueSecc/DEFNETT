@@ -1055,6 +1055,21 @@ class CollectorHTTPTests(TahapBase):
 
         self.assertEqual(self.request("POST", f"/v1/term/{term_id}/close", {}, csrf=csrf)[0], 200)
 
+    def test_operator_minta_ulang_pemulihan_kunci_tetap_pending(self):
+        self.assertEqual(self.request("POST", "/v1/lab/restore-keys/server-a")[0], 401)
+        _, login = self.login("admin", "kunci-rahasia-pengaman-9")
+        self.assertEqual(self.request("POST", "/v1/lab/restore-keys/server-a")[0], 403)  # tanpa CSRF
+        csrf = login["csrf"]
+        self.assertEqual(self.request("POST", "/v1/lab/restore-keys/server-c", csrf=csrf)[0], 404)
+        status, body = self.request("POST", "/v1/lab/restore-keys/server-a", csrf=csrf)
+        self.assertEqual(status, 202)
+        approval = approvals.get(body["approval_id"])
+        self.assertEqual(approval["action"], "RESTORE_KEYS")
+        self.assertEqual(approval["approval_status"], approvals.STATUS_PENDING)  # tidak disetujui otomatis
+        self.assertEqual(approval["parameters"]["artifact"], "kunci")
+        status, body = self.request("POST", "/v1/lab/restore-keys/server-a", csrf=csrf)
+        self.assertEqual((status, body["error"]), (409, "restore_already_pending"))
+
     def test_technical_401_untuk_tanpa_sesi_serangan(self):
         status, body = self.request("POST", "/v1/lab/attack/server-a?vector=web")
         self.assertEqual(status, 401)

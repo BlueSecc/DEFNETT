@@ -597,7 +597,12 @@ function endIncident(sc) {
   sc.demoRun = false;
   sc.vis = null; sc.ended = true; sc.policeScript = false; sc.guardScript = false; sc.alarmStage = false; sc.maint = false; sc.thief = null;
   police[host].hold = null; police[host].stop(); guards[host].loop = null; guards[host].stop();
-  clearFileStates(host);
+  // Penyusup yang tersisa (belum dilumpuhkan) tidak boleh tertinggal di dalam setelah insiden selesai.
+  for (const th of thiefList().filter((t) => t.host === host && !t.ko && !t.leaving && t.inside)) {
+    th.trapped = false; th.loop = null; th.lurk = false; thiefLeave(th);
+  }
+  if (!sc.keepFiles) clearFileStates(host);
+  sc.keepFiles = false;
 }
 function enterStage(sc, stage, opt = {}) {
   const host = sc.host, D = doorOf(host), R = roomRect(host), P = postOf(host);
@@ -611,6 +616,9 @@ function enterStage(sc, stage, opt = {}) {
   sc.maint = ["REPAIRING", "VERIFYING"].includes(stage);
   switch (stage) {
     case "DETECTED": {
+      // File yang dilaporkan agent memang sudah berubah; tandai walau animasi penyusup terpotong.
+      const runPath = cleanPath(sc.run?.path || "");
+      if (runPath && fileAt(host, runPath) && fileState(fileAt(host, runPath)) === "ok") setFileState(host, runPath, "tampered");
       const th = ensureThief(sc);
       th.stop(); th.say("Ketahuan!", 1800, "bad"); th.wait(2600, "panic");
       ring(th.x, th.y - 20, "#e0584a", 900, 42); shake(260);
@@ -704,6 +712,23 @@ function enterStage(sc, stage, opt = {}) {
         pol.stop(); pol.hold = null; pol.go(th.x + 46, th.y + 6, 80).call((a) => { a.say("Diamankan!", 2000, "good"); });
         later(2600, () => { smoke(th.x, th.y - 10, 14); popup(th.x, th.y - 44, "DIAMANKAN", "#7be3b0", 12); th.dead = true; }, sc);
       }
+      break;
+    }
+    case "REJECTED": {
+      // Operator menolak playbook: server tidak diisolasi, file dibiarkan seperti saat terdeteksi,
+      // dan penyusup pergi lewat pintu tempat ia masuk.
+      sc.policeScript = false; sc.guardScript = false; sc.alarmStage = false;
+      sc.shutTarget = 0; sc.cutTarget = 0;
+      if (settle) snap(0, 0);
+      sc.keepFiles = true;
+      pol.stop(); pol.hold = null; pol.say("Playbook ditolak operator", 2400, "bad");
+      gd.loop = null; gd.stop(); gd.go(P.x, P.y, 80).call((a) => a.say("Kunci belum dipulihkan", 2600, "bad"));
+      for (const th of thiefList().filter((t) => t.host === host && !t.ko && !t.leaving)) {
+        th.stop(); th.trapped = false; th.loop = null; th.lurk = false; th.carry = true;
+        th.say("Lolos!", 1600, "bad");
+        later(400, () => thiefLeave(th), sc);
+      }
+      popup(D.x, D.y - 66, "PLAYBOOK DITOLAK", "#e6b23a", 11);
       break;
     }
     case "FAILED": {
@@ -934,6 +959,25 @@ function attackNotice(text) {
   window.clearTimeout(attackNotice.timer);
   if (text) attackNotice.timer = window.setTimeout(() => { node.textContent = ""; }, 7000);
 }
+/* Serangan berjalan async di executor; kalau ditolak (mis. kunci masih rusak dari serangan
+ * sebelumnya yang pemulihannya ditolak), beri tahu operator alih-alih diam. */
+async function watchAttack(approvalId) {
+  for (const delay of [4000, 5000, 7000]) {
+    await new Promise((resolve) => window.setTimeout(resolve, delay));
+    try {
+      const response = await fetch("/v1/approvals", { cache: "no-store" });
+      if (!response.ok) return;
+      const approval = ((await response.json()).approvals || []).find((item) => item.id === approvalId);
+      if (!approval || approval.execution_status === "CLAIMED" || approval.execution_status === "NONE") continue;
+      if (approval.execution_status !== "FAILED") return;
+      const detail = String(approval.execution_detail || "");
+      attackNotice(detail.includes("key_not_pristine")
+        ? "Gagal: kunci server masih rusak dari serangan sebelumnya. Buka Playbook → Pulihkan kunci → Setujui."
+        : `Serangan gagal: ${ATTACK_ERRORS[detail.split(":")[0]] || detail || "lihat Playbook"}`);
+      return;
+    } catch (error) { return; }
+  }
+}
 async function launchAttack(host) {
   const sc = scene[host];
   if (!sc || sc.attackPending || incidentActive(host) || sc.queue.length) return;
@@ -955,6 +999,7 @@ async function launchAttack(host) {
     }
     patrol.fastUntil = Date.now() + 60000;
     pollDashboard();
+    if (body.approval_id) watchAttack(body.approval_id);
     window.setTimeout(() => { sc.attackPending = false; updateAttackButton(); }, 25000);
   } catch (error) {
     sc.attackPending = false;
@@ -1121,6 +1166,7 @@ function drawNetwork() {
 const STATUS = {
   DETECTED: ["ALERT", "#e0584a"], ISOLATING: ["ISOLASI", "#e68a2e"], ISOLATED: ["TERISOLASI", "#e0584a"], REPAIRING: ["MAINTENANCE", "#d9a42b"],
   VERIFYING: ["VERIFIKASI", "#4f9fdc"], REJOINING: ["REJOIN", "#2fa593"], REPAIRED: ["ONLINE ✓", "#2f9f6d"], FAILED: ["GAGAL", "#e0584a"],
+  REJECTED: ["DITOLAK · KUNCI RUSAK", "#d9a42b"],
 };
 function hostStatus(host) {
   const sc = scene[host];

@@ -1365,6 +1365,43 @@ class Handler(BaseHTTPRequestHandler):
             "approval_id": approval["id"], "approval_status": "APPROVED",
         })
 
+    def request_key_restore(self):
+        """Minta ulang playbook pemulihan kunci setelah approval sebelumnya ditolak/kedaluwarsa.
+
+        Approval dibuat PENDING (tidak disetujui otomatis): operator tetap harus menekan
+        Setujui di Playbook sebelum executor mengisolasi dan memulihkan host."""
+        session = session_from_headers(self.headers)
+        if not authority_authorized(session, "operator"):
+            return self.respond(401, {"error": "unauthorized"})
+        if not self.csrf_or_401(session):
+            return
+        host_id = urlsplit(self.path).path.rsplit("/", 1)[-1]
+        if host_id not in ALLOWED_HOSTS:
+            return self.respond(404, {"error": "unknown_host"})
+        try:
+            pending = [a for a in list_approvals(50)
+                       if a.get("host_id") == host_id and a.get("action") == "RESTORE_KEYS"
+                       and a.get("approval_status") == approvals.STATUS_PENDING]
+        except (OSError, RuntimeError, urllib.error.URLError):
+            return self.respond(503, {"error": "approval_authority_unavailable"})
+        if pending:
+            return self.respond(409, {"error": "restore_already_pending", "approval_id": pending[0]["id"]})
+        survivor = "server-b" if host_id == "server-a" else "server-a"
+        parameters = {
+            "artifact": "kunci", "survivor": survivor, "detect_seconds": None, "entry": None,
+            "delay_seconds": DEMO_REPAIR_DELAY_SECONDS if repair_delay_applies(host_id) else 0,
+        }
+        actor = f"operator:{session['username']}"
+        try:
+            approval = create_approval(
+                "RESTORE_KEYS", host_id, "etc/kunci1.dat", parameters,
+                created_by=actor, reason="operator_meminta_pemulihan_kunci",
+            )
+        except (approvals.ApprovalError, RuntimeError, OSError, urllib.error.URLError) as error:
+            return self.respond(409, {"error": str(error)[:120]})
+        print(f"pemulihan kunci diminta oleh {actor} untuk {host_id}; menunggu persetujuan", flush=True)
+        return self.respond(202, {"approval_id": approval["id"], "approval_status": approval["approval_status"]})
+
     def request_backend_rejoin(self):
         session = session_from_headers(self.headers)
         if not authority_authorized(session, "operator"):
@@ -1602,6 +1639,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.terminal_post()
         if self.path.startswith("/v1/lab/recover/"):
             return self.request_backend_rejoin()
+        if self.path.startswith("/v1/lab/restore-keys/"):
+            return self.request_key_restore()
         if self.path != "/v1/events":
             return self.respond(404, {"error": "not_found"})
         return self.receive_event()
