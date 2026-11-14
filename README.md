@@ -12,6 +12,34 @@ Karya untuk **Kartika Cyber Hackathon 2026**, kategori **Penangkalan**.
 | Slide penjelasan | https://www.canva.com/d/iTrcMg9nvcdA7o1 |
 | Video demo | [isi tautan YouTube] |
 
+## Coba dalam 5 menit
+
+**Tanpa instalasi:** tonton video demo di atas, atau lihat [Tampilan](#tampilan).
+
+**Dengan Docker** (macOS, Linux, atau Windows lewat WSL2). Butuh Docker Desktop yang sedang berjalan, plus `git`, `python3`, dan `openssl`.
+
+1. Unduh dan jalankan:
+
+   ```bash
+   git clone https://github.com/BlueSecc/DEFNETT.git
+   ```
+
+   ```bash
+   cd DEFNETT && sh lab/build.sh
+   ```
+
+2. Tunggu sampai muncul `[5/5] Siap.`, lalu **catat kata sandi** di baris `Kata sandi (simpan!): ...`. Kata sandi ini hanya ditampilkan sekali.
+3. Percayai sertifikat lab `~/.config/defnett-lab/tls/ca.crt` di browser ([caranya](docs/INSTALASI.md#mempercayai-ca-lab)).
+4. Buka `https://127.0.0.1:8443/`, klik **Masuk operator**, dan masuk dengan username `admin` serta kata sandi tadi.
+
+**Demo singkat setelah masuk:**
+
+1. Buka tab **Patrol**, pilih **Server A**, lalu tekan **SERANG!**.
+2. Tunggu sekitar 10 detik, lalu buka **Detail → Playbook** dan tekan **Setujui**.
+3. Amati Server A diisolasi, dipulihkan, dan kembali online, sementara Server B tetap melayani.
+
+Penjelasan tiap langkah ada di [Petunjuk penggunaan](#petunjuk-penggunaan). Kalau ada kendala, lihat [Pemecahan masalah](#pemecahan-masalah).
+
 ## Daftar isi
 
 - [Mengapa DEFNETT](#mengapa-defnett)

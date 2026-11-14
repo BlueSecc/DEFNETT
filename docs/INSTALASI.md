@@ -7,7 +7,9 @@ Ada dua cara memasang DEFNETT. Pilih salah satu:
 | [A. Docker](#a-instalasi-dengan-docker) | Mencoba cepat di satu komputer | ±15 menit | Dashboard, Patrol (satu pintu), persetujuan operator, SERANG!. Tanpa WordPress dan tanpa tab Terminal |
 | [B. Empat VM VirtualBox](#b-instalasi-di-empat-vm-virtualbox) | Demo lengkap seperti di video | ±2–3 jam | Semua fitur: blog WordPress di dua server, pintu per port, isolasi HAProxy sungguhan, tab Terminal |
 
-Semua perintah di bawah dijalankan dari folder repositori, kecuali disebut lain. Baris yang diawali `<...>` harus diganti dengan nilai Anda sendiri.
+**Baru pertama kali mencoba? Pilih Docker (A).** Cara VM (B) hanya perlu bila ingin demo lengkap dengan blog WordPress dan tab Terminal.
+
+Semua perintah di bawah dijalankan dari folder repositori, kecuali disebut lain. Teks di dalam `<...>` harus diganti dengan nilai Anda sendiri.
 
 ---
 
@@ -15,9 +17,16 @@ Semua perintah di bawah dijalankan dari folder repositori, kecuali disebut lain.
 
 ### A1. Yang dibutuhkan
 
-- Docker Desktop (macOS/Windows) atau Docker Engine (Linux) dengan **Docker Compose v2** (`docker compose version` harus berhasil).
-- `git`, `python3`, dan `openssl`.
-- RAM bebas sekitar 4 GB.
+- **Docker Desktop** (macOS/Windows) atau **Docker Engine** (Linux) dengan Docker Compose v2. Buka Docker Desktop dan tunggu sampai statusnya *running* sebelum lanjut.
+- `git`, `python3`, dan `openssl`. Sudah tersedia di macOS dan kebanyakan Linux.
+- RAM bebas sekitar 4 GB dan ruang disk sekitar 2 GB.
+- **Windows:** jalankan semua perintah di dalam **WSL2 (Ubuntu)**, bukan PowerShell, karena skripnya berbentuk shell script. Aktifkan *WSL integration* di Docker Desktop (Settings → Resources → WSL integration).
+
+Cek bahwa semuanya siap. Keempat perintah harus menampilkan versi, bukan error:
+
+```bash
+docker compose version && git --version && python3 --version && openssl version
+```
 
 ### A2. Unduh repositori
 
@@ -45,6 +54,26 @@ Skrip ini:
 4. membuat akun operator `admin` dan **mencetak kata sandinya sekali saja**. Catat kata sandi ini;
 5. mengisi data contoh dan trust anchor (salinan master kunci).
 
+Proses pertama memakan waktu beberapa menit karena image Docker dibangun. Akhir keluarannya kurang lebih seperti ini:
+
+```text
+[3/5] Menyiapkan operator dan data demo...
+   Akun operator dashboard: admin
+   Kata sandi (simpan!): <kata-sandi-acak>
+...
+[4/5] Status kontainer:
+...
+[5/5] Siap. Dashboard: https://127.0.0.1:8443/  -  App lewat HAProxy: http://127.0.0.1:8080/
+```
+
+Salin kata sandi di baris `Kata sandi (simpan!)`. Kata sandi ini tidak ditampilkan lagi.
+
+Untuk memastikan semua container berjalan (kolom *Status* berisi `Up`):
+
+```bash
+docker compose -f lab/compose.yaml -f lab/compose.canary.yaml ps
+```
+
 ### A4. Percayai sertifikat CA lab di browser
 
 Dashboard memakai HTTPS dengan CA buatan sendiri, jadi browser harus mempercayainya. Lihat [Mempercayai CA lab](#mempercayai-ca-lab) dan gunakan berkas `~/.config/defnett-lab/tls/ca.crt`.
@@ -52,6 +81,23 @@ Dashboard memakai HTTPS dengan CA buatan sendiri, jadi browser harus mempercayai
 ### A5. Buka dashboard
 
 Buka `https://127.0.0.1:8443/`, klik **Masuk operator**, lalu masuk dengan `admin` dan kata sandi dari langkah A3. Lanjutkan ke [Petunjuk penggunaan](../README.md#petunjuk-penggunaan).
+
+Yang tersedia di versi Docker:
+
+| Fitur | Docker |
+|---|---|
+| Dashboard, Overview, Patrol, Playbook | Ya |
+| SERANG!, Setujui, Tolak, Pulihkan kunci | Ya |
+| Isolasi lewat HAProxy dan pemulihan | Ya |
+| Situs di `http://127.0.0.1:8080/` | Ya, berupa aplikasi demo sederhana (bukan WordPress) |
+| Pintu per port di Patrol | Satu pintu saja, karena agent berjalan di container terpisah |
+| Tab Terminal | Tidak, karena hanya untuk lab VM |
+
+Uji otomatis alur lengkap (opsional). Skrip ini login sebagai operator, memicu insiden, menyetujui, lalu memeriksa isolasi dan pemulihan:
+
+```bash
+DEFNETT_OPERATOR_USER=admin DEFNETT_OPERATOR_PASSWORD='<kata-sandi>' sh lab/test-containment.sh
+```
 
 ### A6. Menghentikan dan menyalakan lagi
 
@@ -67,7 +113,23 @@ Menyalakan lagi:
 sh lab/build.sh
 ```
 
-Akun operator yang sudah ada tidak dibuat ulang. Untuk menghapus seluruh data dan memulai dari nol, tambahkan `-v` pada perintah `down`. Ini menghapus database bukti dan akun operator secara permanen.
+Akun operator yang sudah ada tidak dibuat ulang, jadi kata sandi lama tetap berlaku.
+
+### A7. Menghapus seluruh lab
+
+Perintah ini menghapus container, database bukti, dan akun operator secara permanen:
+
+```bash
+docker compose -f lab/compose.yaml -f lab/compose.canary.yaml down -v
+```
+
+Hapus juga sertifikat lab:
+
+```bash
+rm -rf ~/.config/defnett-lab
+```
+
+Setelah itu, hapus CA bernama **DEFNETT Local Lab CA** dari daftar sertifikat tepercaya di sistem atau browser.
 
 ---
 
