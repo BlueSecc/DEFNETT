@@ -17,7 +17,7 @@ Karya untuk **Kartika Cyber Hackathon 2026**, kategori **Penangkalan**.
 - [Mengapa DEFNETT](#mengapa-defnett)
 - [Fitur utama](#fitur-utama)
 - [Arsitektur](#arsitektur)
-- [Mulai cepat](#mulai-cepat)
+- [Instalasi](#instalasi)
 - [Petunjuk penggunaan](#petunjuk-penggunaan)
 - [Pemecahan masalah](#pemecahan-masalah)
 - [Hasil uji](#hasil-uji)
@@ -95,19 +95,37 @@ Port yang terbuka di Server A dan B:
 
 Bila operator menekan **Tolak**, tidak ada tindakan. Pemulihan bisa diminta ulang lewat **Pulihkan kunci**.
 
-## Mulai cepat
+## Instalasi
 
-**Docker (satu komputer)**
+Panduan lengkap langkah demi langkah ada di **[docs/INSTALASI.md](docs/INSTALASI.md)**. Ringkasnya:
+
+| Cara | Cocok untuk | Waktu |
+|---|---|---|
+| [Docker](docs/INSTALASI.md#a-instalasi-dengan-docker) | Mencoba cepat di satu komputer (tanpa WordPress dan tab Terminal) | ±15 menit |
+| [Empat VM VirtualBox](docs/INSTALASI.md#b-instalasi-di-empat-vm-virtualbox) | Demo lengkap seperti di video | ±2–3 jam |
+
+**Docker, singkatnya:**
 
 ```bash
-sh lab/build.sh
+git clone https://github.com/BlueSecc/DEFNETT.git
 ```
 
-Skrip menyiapkan token, sertifikat CA lab, data contoh, dan trust anchor, lalu mencetak kata sandi akun operator `admin`. Simpan kata sandi itu. Percayai `~/.config/defnett-lab/tls/ca.crt` di browser, lalu buka `https://127.0.0.1:8443/`. Di Docker, Patrol hanya menampilkan satu pintu karena agent berjalan di container terpisah, dan tab Terminal tidak dipakai.
+```bash
+cd DEFNETT && sh lab/build.sh
+```
 
-**Empat VM VirtualBox**
+Catat kata sandi `admin` yang dicetak skrip, percayai `~/.config/defnett-lab/tls/ca.crt` di browser ([caranya](docs/INSTALASI.md#mempercayai-ca-lab)), lalu buka `https://127.0.0.1:8443/`.
 
-Konfigurasi tiap VM ada di [lab/vm](lab/vm). Ikuti [TLS dan Approval Authority cutover](lab/vm/SECURITY_CUTOVER_RUNBOOK.md), lalu buka `https://192.168.56.20:8443/`. Pembaruan dikirim dari laptop dengan skrip berikut. Password SSH dan sudo diketik sendiri, dan file lama selalu dicadangkan sebagai `<nama>.bak-<waktu>`.
+**Empat VM, singkatnya:**
+
+1. buat jaringan host-only `defnett` (`192.168.56.0/24`) dan empat VM Ubuntu Server;
+2. siapkan IP, hostname, dan paket tiap VM;
+3. pasang HAProxy, WordPress, dan layanan DEFNETT;
+4. jalankan `lab/vm/cutover-stage.sh` dari laptop, lalu `cutover-vm.sh` di tiap VM.
+
+Semua perintahnya ada di [panduan instalasi](docs/INSTALASI.md#b-instalasi-di-empat-vm-virtualbox).
+
+**Pembaruan setelah kode berubah** (lab VM, dijalankan dari laptop). Password SSH dan sudo diketik sendiri, dan file lama dicadangkan sebagai `<nama>.bak-<waktu>`.
 
 | Perintah | Kegunaan |
 |---|---|
@@ -127,7 +145,7 @@ python3 -m unittest discover -s lab/tests
 
 Pastikan hal berikut sudah siap:
 
-- [ ] Lab berjalan (Docker atau empat VM, lihat [Mulai cepat](#mulai-cepat)).
+- [ ] Lab sudah terpasang dan berjalan (lihat [Instalasi](#instalasi)).
 - [ ] Browser sudah mempercayai sertifikat CA lab, sehingga `https://...:8443/` terbuka tanpa peringatan.
 - [ ] Akun operator dashboard (dibuat `lab/build.sh` atau oleh admin lab).
 - [ ] Untuk tab Terminal: username dan password akun Linux di Server A/B.
@@ -352,6 +370,7 @@ Jika lolos ke babak selanjutnya, kami akan:
 ## Dokumentasi lanjutan
 
 - [Dokumentasi Teknis](docs/DOKUMENTASI_TEKNIS.md): komponen, alur insiden, API, keamanan, batasan.
+- [Panduan Instalasi](docs/INSTALASI.md): Docker dan empat VM, langkah demi langkah.
 - [Hasil Uji](docs/HASIL_UJI.md): rincian uji lab dan pengujian otomatis.
 - [lab/README.md](lab/README.md): menjalankan lab dengan Docker dan detail endpoint.
 - [lab/vm](lab/vm): konfigurasi dan skrip tiap VM.

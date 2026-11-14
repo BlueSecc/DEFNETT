@@ -9,5 +9,7 @@ ufw allow from 192.168.56.1  to any port 8080 proto tcp comment "app admin"
 ufw allow from 192.168.56.10 to any port 8080 proto tcp comment "healthcheck haproxy"
 ufw allow from 192.168.56.20 to any port 8080 proto tcp comment "probe trafik collector"
 ufw allow from 192.168.56.20 to any port 8091 proto tcp comment "repair collector"
+ufw allow from 192.168.56.10 to any port 80   proto tcp comment "blog lewat haproxy"
+ufw allow from 192.168.56.1  to any port 80   proto tcp comment "blog admin host"
 printf "y\n" | ufw enable
 ufw status numbered

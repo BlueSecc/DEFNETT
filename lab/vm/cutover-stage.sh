@@ -33,7 +33,7 @@ send "$ip" "$HERE/cutover-vm.sh" "$HERE/collector/collector.env" "$HERE/collecto
   "$HERE/collector/provision-service-users.sh" "$HERE"/collector/defnett-units/*.service \
   "$LAB/collector.py" "$LAB/db.py" "$LAB/policy_gate.py" "$LAB/approvals.py" "$LAB/operator_auth.py" \
   "$LAB/trajectory.py" "$LAB/risk_engine.py" "$LAB/executor.py" "$LAB/approval_authority.py" \
-  "$LAB/authority_client.py" "$LAB/tls_support.py" "$LAB/provision_operators.py" "$CONF/tokens.env"
+  "$LAB/authority_client.py" "$LAB/tls_support.py" "$LAB/provision_operators.py" "$LAB/web_terminal.py" "$CONF/tokens.env"
 scp -q "$LAB"/dashboard/index.html "$LAB"/dashboard/*.css "$LAB"/dashboard/*.js "$USER_VM@$ip:/tmp/defnett-cutover/dashboard/"
 scp -q "$TLS/ca.crt" "$TLS"/collector-vm.* "$TLS"/executor-vm.* "$TLS"/approval-authority.* "$USER_VM@$ip:/tmp/defnett-cutover/tls/"
 echo "paket collector terkirim"
