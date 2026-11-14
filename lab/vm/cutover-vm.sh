@@ -116,10 +116,10 @@ case "$ROLE" in
     [ ! -f /evidence/events.sqlite3 ] || cp -p /evidence/events.sqlite3 "$BACKUP/events.sqlite3"
 
     for name in collector db policy_gate approvals operator_auth trajectory risk_engine executor \
-        approval_authority authority_client tls_support provision_operators; do
+        approval_authority authority_client tls_support provision_operators web_terminal; do
       put "$PKG/$name.py" "/opt/defnett/$name.py" 0644 root
     done
-    for name in index.html dashboard.css dashboard.js patrol.css patrol.js; do
+    for name in index.html dashboard.css dashboard.js patrol.css patrol.js terminal.js; do
       put "$PKG/dashboard/$name" "/opt/defnett/dashboard/$name" 0644 root
     done
     put "$PKG/defnett-collector-network-guard" /usr/local/libexec/defnett-collector-network-guard 0750 root
